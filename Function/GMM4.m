@@ -216,6 +216,11 @@ Nt=sat.geom.cyl(i).Nt;
 Nz=sat.geom.cyl(i).Nz;
 Angles=sat.geom.cyl(i).angles;
 Center=sat.geom.cyl(i).center;
+if isfield(sat.geom.cyl(i),'R_int') && ~isempty(sat.geom.cyl(i).R_int)
+    R_int=sat.geom.cyl(i).R_int;
+else
+    R_int=0;
+end
 
 zz=linspace(-L/2,L/2,Nz);
 r1=[1 0 0; 0 cosd(Angles(1)) -sind(Angles(1)); 0 sind(Angles(1)) cosd(Angles(1))];
@@ -223,13 +228,20 @@ r2=[cosd(Angles(2)) 0 sind(Angles(2)); 0 1 0; -sind(Angles(2)) 0 cosd(Angles(2))
 r3=[cosd(Angles(3)) -sind(Angles(3)) 0; sind(Angles(3)) cosd(Angles(3)) 0; 0 0 1];
 rot=r3*r2*r1;
 
-[Nodes, Triangles, Quads]=Circle_Mesh(R,Nr,Nt);
+[Nodes, Triangles, Quads]=Circle_Mesh(R,Nr,Nt,R_int);
 [Nodes3D,Prisms,Bricks] = Mesh2D_to_Mesh3D(Nodes,Triangles,Quads,zz);
-[Central] = Tri_to_Poly(Prisms,Nt,Nz);
 
+if R_int==0
+    [Central] = Tri_to_Poly(Prisms,Nt,Nz);
+    total_nodes=length(Central(:,1))+length(Bricks(:,1));
+else
+    % Hollow cylinder: no central column, every ring (including the
+    % inner bore ring) is meshed as a normal brick ring.
+    Central=[];
+    total_nodes=length(Bricks(:,1));
+end
 
 Nodes3D=Nodes3D*rot+Center;
-total_nodes=length(Central(:,1))+length(Bricks(:,1));
 
 [face] = cylinder_face(Nodes3D,Nt,Nr,Nz,R,zz,Angles,Center);
 for j=1:1:Nt+2
@@ -242,7 +254,7 @@ for j=1:1:Nt+2
 end
 sat.geom.cyl(i).face=face;
 
-[elem,Connect] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L,Nt,Nr,Nz,total_nodes);
+[elem,Connect] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L,Nt,Nr,Nz,total_nodes,R_int);
 for j=1:1:total_nodes
     elem(j).ID=j+node_counter;
     elem(j).ex_in='i';

@@ -1,5 +1,5 @@
 function [face] = cylinder_face(Nodes3D,Nt,Nr,Nz,R,zz,an,C)
-id1=Nt*Nr+1;
+id1=size(Nodes3D,1)/Nz; % nodes per axial layer (Nt*Nr+1 solid, Nt*(Nr+1) hollow)
 id2=size(Nodes3D,1);
 alfa=360/Nt;
 r1=[1 0 0; 0 cosd(an(1)) -sind(an(1)); 0 sind(an(1)) cosd(an(1))];

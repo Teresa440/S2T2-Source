@@ -1,6 +1,8 @@
 function [Nodes3D,Prisms,Bricks] = Mesh2D_to_Mesh3D(Nodes,Triangles,Quads,zz)
 
-Triangles(:,4)=-10e10;
+if ~isempty(Triangles)
+    Triangles(:,4)=-10e10;
+end
 Mesh2D=[Triangles; Quads];
 
 n=size(Nodes,1);
