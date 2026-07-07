@@ -12,4 +12,3 @@ p2=[polx(i+1),poly(i+1),polz(i+1)];
 S(i+1)=area_tri_from_point2(p1,p2,p3);
 area=sum(S);
 end
-%% Comment 
