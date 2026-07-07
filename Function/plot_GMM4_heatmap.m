@@ -1,0 +1,107 @@
+function [handle_ext, handle_int] = plot_GMM4_heatmap(sat,graph,visibility,ix,val_case)
+
+% visibility <- selectedButton.Text
+% ix is the index of the time vector
+
+handle_ext = [];
+handle_int = [];
+
+cla(graph);
+
+ax=[0,sat.geom.ext.size(1)*1.5];
+ay=[0,sat.geom.ext.size(2)*1.5];
+az=[0,sat.geom.ext.size(3)*1.5];
+
+ax_z=zeros(size(ax));
+
+
+plot3(graph,ax,ax_z,ax_z,'r',LineWidth=3);
+hold(graph,'on')
+plot3(graph,ax_z,ay,ax_z,'g',LineWidth=3);
+hold(graph,'on')
+plot3(graph,ax_z,ax_z,az,'b',LineWidth=3);
+
+daspect(graph,[1 1 1]);
+xlabel(graph,'X'); ylabel(graph,'Y'); zlabel(graph,'Z');
+
+if val_case == 1
+    T_temp = [sat.node.globe.Temperature_t];
+elseif val_case == 2
+    T_temp = [sat.node.globe.Temperature_t_cold];
+end
+T_scatt = T_temp(ix,:)';
+coord = reshape([sat.node.globe.node],[3, sat.node.total_node])';
+f = scatteredInterpolant(coord,T_scatt);
+
+for i=1:1:length(sat.geom.surfaces)
+    if strcmp(sat.geom.surfaces(i).item,'cyl') == 0 % if not cylinder
+        T_grid = f(sat.geom.globe(i).gridX,sat.geom.globe(i).gridY,sat.geom.globe(i).gridZ);
+        h_temp = surf(graph,sat.geom.globe(i).gridX,sat.geom.globe(i).gridY,sat.geom.globe(i).gridZ,T_grid,...
+            'EdgeColor','black','FaceColor', 'interp','LineStyle',':');
+        hold(graph,'on')
+        if strcmp(sat.geom.surfaces(i).item,'ex') == 1 || strcmp(sat.geom.surfaces(i).item,'sol') == 1
+            handle_ext = [handle_ext; h_temp];
+        else
+            handle_int = [handle_ext; h_temp];
+        end
+    end
+end
+
+for j=1:1:sat.geom.Nc
+
+    elem = sat.node.cyl(j).elements;
+
+    for i=1:1:length(elem)        
+
+        if isempty(elem(i).vertf)==0
+            if strcmp(elem(i).type,'s')==1
+
+                T_grid = f(elem(i).vertf(1:4,1),elem(i).vertf(1:4,2),elem(i).vertf(1:4,3));
+                h_temp = patch(graph,elem(i).vertf(1:4,1),elem(i).vertf(1:4,2),elem(i).vertf(1:4,3),T_grid,...
+                    'EdgeColor','black','FaceColor', 'interp','LineStyle',':');    
+                hold(graph,'on')
+                handle_int = [handle_int; h_temp];  
+
+                T_grid = f(elem(i).vertf(5:8,1),elem(i).vertf(5:8,2),elem(i).vertf(5:8,3));
+                h_temp = patch(graph,elem(i).vertf(5:8,1),elem(i).vertf(5:8,2),elem(i).vertf(5:8,3),T_grid,...
+                    'EdgeColor','black','FaceColor', 'interp','LineStyle',':');    
+                hold(graph,'on')
+                handle_int = [handle_int; h_temp];  
+            else
+                T_grid = f(elem(i).vertf(:,1),elem(i).vertf(:,2),elem(i).vertf(:,3));
+                h_temp = patch(graph,elem(i).vertf(:,1),elem(i).vertf(:,2),elem(i).vertf(:,3),T_grid,...
+                    'EdgeColor','black','FaceColor', 'interp','LineStyle',':');    
+                hold(graph,'on')
+                handle_int = [handle_int; h_temp];  
+            end
+        end
+    end
+end
+
+if strcmp(visibility,'External')
+    for i=1:length(handle_ext)
+        handle_ext(i).FaceAlpha=1;        
+    end
+elseif strcmp(visibility,'Both')
+    for i=1:length(handle_ext)
+        handle_ext(i).FaceAlpha=0.3;
+    end
+elseif strcmp(visibility,'Internal')
+    for i=1:length(handle_ext)
+        handle_ext(i).FaceAlpha=0;
+    end
+end
+
+set(graph, 'Visible','off');
+axis(graph,'vis3d');
+
+hold(graph,'off');
+
+c2=colormap(graph,jet(10000));
+c=colorbar(graph,'Position', [0.88 0.2300 0.0500 0.6000]);
+c.Label.Position=[-0.82; -0.2102; 0];
+
+drawnow()
+
+
+end
