@@ -1,19 +1,3 @@
-% Validazione: conduzione radiale in un cilindro cavo omogeneo, regime stazionario.
-%
-% Confronta la resistenza termica radiale "vista" dalla rete di conduttanze
-% del modello (Circle_Mesh -> Mesh2D_to_Mesh3D -> node_cyl_creator3 -> TMM2)
-% con la soluzione analitica esatta di un guscio cilindrico:
-%
-%   R_analitica = ln(r2/r1) / (2*pi*k*L)
-%
-% Nota: la rete di conduttanze collega solo i BARICENTRI degli anelli, non le
-% superfici fisiche vere e proprie (r1=R_int e r2=R_out). Mancano quindi due
-% "mezze resistenze" di bordo (dal baricentro del primo/ultimo anello alla
-% superficie fisica), che nel modello sono accoppiate solo via radiazione
-% (campo Af), non via conduzione. Per un confronto bordo-fisico-a-bordo-fisico
-% coerente con la formula a mano, queste due mezze celle vengono aggiunte qui
-% esplicitamente, con la stessa formula logaritmica usata in TMM2.m.
-
 clear
 addpath(fileparts(mfilename('fullpath')));
 

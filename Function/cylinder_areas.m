@@ -1,13 +1,13 @@
 function [Afb,Aft,Afl,Acb,Act,Acl,V] = cylinder_areas(R,Nr,Nt,L,Nz,R_int)
 
-if nargin < 6 || isempty(R_int)
+if nargin < 6 || isempty(R_int)   %check input
     R_int = 0;
 end
 
-a=(R-R_int)/Nr;
+a=(R-R_int)/Nr; %size of the rings
 alfa=(360/Nt)/2;
-dz=L/(Nz-1);
-
+dz=L/(Nz-1); %size of the layers
+ 
 Afb=zeros(Nr,6);
 Aft=zeros(Nr,6);
 Afl=zeros(Nr,6);
