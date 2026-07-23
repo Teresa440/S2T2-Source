@@ -16,12 +16,12 @@ Act=zeros(Nr,6);
 Acl=zeros(Nr,6);
 
 V=zeros(1,Nr);
-
-
+                                                 
+                                                    
 for j=1:1:Nr
     r_out=R_int+j*a;
     r_in=R_int+(j-1)*a;
-
+                                                  
     A(1)=a*dz;
     A(2)=2*r_out*sind(alfa)*dz;
     A(3)=0.5*sind(2*alfa)*(r_out^2-r_in^2);
@@ -33,7 +33,6 @@ for j=1:1:Nr
     Afb(j,:)=[0 0 0 0 0 A(6)];
     Aft(j,:)=[0 0 A(3) 0 0 0];
     Afl(j,:)=[0 0 0 0 0 0];
-
     Acb(j,:)=[A(1) A(2) A(3) A(4) A(5) 0];
     Act(j,:)=[A(1) A(2) 0 A(4) A(5) A(6)];
     Acl(j,:)=[A(1) A(2) A(3) A(4) A(5) A(6)];

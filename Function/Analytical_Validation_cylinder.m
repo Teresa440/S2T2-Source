@@ -11,6 +11,7 @@ zz = linspace(-Lc/2, Lc/2, Nz);
 [Nodes3D, ~, Bricks] = Mesh2D_to_Mesh3D(Nodes, Triangles, Quads, zz);
 total_nodes = size(Bricks,1);
 [elem, Con] = node_cyl_creator3(Nodes3D, [], Bricks, R_out, Lc, Nt, Nr, Nz, total_nodes, R_int);
+total_nodes = numel(elem); % may include 2 extra sealing-cap nodes
 
 for kk = 1:total_nodes
     elem(kk).item = 'cyl';

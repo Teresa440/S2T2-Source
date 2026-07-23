@@ -158,6 +158,7 @@ Center=sat.geom.parall(i).center;
 L=sat.geom.parall(i).sizes;
 N=sat.geom.parall(i).nodes;
 Angles=sat.geom.parall(i).angles;
+th=sat.geom.parall(i).th;
 
 
 [face] = face_box_creator(Center,L,N,Angles);
@@ -167,7 +168,14 @@ for j=1:1:6
 end
 sat.geom.parall(i).face=face;
 
-[elem,total_nodes,Connect] = node_solid_creator2(Center,L,N,Angles);
+if th>0
+    % Hollow shell (uniform wall thickness on all 6 faces), same mesh
+    % builder already used for the external Structure box.
+    Th=repmat(th,1,6);
+    [elem,total_nodes,Connect] = node_box_creator2(Center,L,N,Angles,Th);
+else
+    [elem,total_nodes,Connect] = node_solid_creator2(Center,L,N,Angles);
+end
 
 for j=1:1:total_nodes
     elem(j).ID=j+node_counter;
@@ -221,6 +229,11 @@ if isfield(sat.geom.cyl(i),'R_int') && ~isempty(sat.geom.cyl(i).R_int)
 else
     R_int=0;
 end
+if isfield(sat.geom.cyl(i),'sealed') && ~isempty(sat.geom.cyl(i).sealed)
+    sealed=sat.geom.cyl(i).sealed;
+else
+    sealed=false;
+end
 
 zz=linspace(-L/2,L/2,Nz);
 r1=[1 0 0; 0 cosd(Angles(1)) -sind(Angles(1)); 0 sind(Angles(1)) cosd(Angles(1))];
@@ -254,7 +267,8 @@ for j=1:1:Nt+2
 end
 sat.geom.cyl(i).face=face;
 
-[elem,Connect] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L,Nt,Nr,Nz,total_nodes,R_int);
+[elem,Connect] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L,Nt,Nr,Nz,total_nodes,R_int,sealed);
+total_nodes = numel(elem); % may include 2 extra sealing-cap nodes
 for j=1:1:total_nodes
     elem(j).ID=j+node_counter;
     elem(j).ex_in='i';
