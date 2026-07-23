@@ -281,9 +281,37 @@ sat.geom.cyl(i).face=face;
 [elem,Connect] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L_wall,Nt,Nr,Nz,total_nodes,R_int);
 
 if do_caps
-    [elem_cb,Con_cb] = build_cyl_cap(R_int,R,Nr,Nt,Thickness,rot,Center,-L_wall/2,false);
-    [elem_ct,Con_ct] = build_cyl_cap(R_int,R,Nr,Nt,Thickness,rot,Center, L_wall/2,true);
-    [elem,Connect] = stitch_cyl_wall_and_caps(elem,Connect,elem_cb,Con_cb,elem_ct,Con_ct,Nt,Nr,Nz);
+    % Lumped end caps: one isothermal node per end, full cross-section
+    % (area = pi*R^2, not just the bore) -- alternative to the meshed
+    % cap (build_cyl_cap.m) on the main branch. Each of the wall's Nr
+    % rings gets its own axial link (Con code 7) to the same lumped
+    % node, since the ring's own axial contact area differs per ring.
+    elem_cb = build_cyl_cap_lumped(R,Nt,Thickness,rot,Center,-L_wall/2,false);
+    elem_ct = build_cyl_cap_lumped(R,Nt,Thickness,rot,Center, L_wall/2,true);
+
+    n_wall = numel(elem);
+    idx_bottom = n_wall+1;
+    idx_top = n_wall+2;
+    elem = [elem,elem_cb,elem_ct];
+
+    k_wall=@(i,j,h) Nt*Nr*(h-1) + (j-1)*Nt + i;
+    for jj=1:1:Nr
+        for ii=1:1:Nt
+            m_bottom = k_wall(ii,jj,1);
+            a_bottom = elem(m_bottom).Af(6); % was exposed to environment
+            elem(m_bottom).Ac(6) = a_bottom;
+            elem(m_bottom).Af(6) = 0;        % now covered by the cap
+            Connect(m_bottom,idx_bottom) = 7;
+            Connect(idx_bottom,m_bottom) = 7;
+
+            m_top = k_wall(ii,jj,Nz-1);
+            a_top = elem(m_top).Af(3);
+            elem(m_top).Ac(3) = a_top;
+            elem(m_top).Af(3) = 0;
+            Connect(m_top,idx_top) = 7;
+            Connect(idx_top,m_top) = 7;
+        end
+    end
 end
 
 total_nodes = numel(elem); % may include the 2 end-cap meshes

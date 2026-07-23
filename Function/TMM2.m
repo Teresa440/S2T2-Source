@@ -31,6 +31,16 @@ for i=1:1:nn
                 use_log = ~in0_i && ~in0_j;
             end
 
+            % Axial link between a wall ring and a full-area lumped end
+            % cap (code 7 both ways): distance is the explicit sum of
+            % each side's own half-thickness (dz_local/2), not the
+            % automatic node-position-based L, since the wall's dz and
+            % the cap's own thickness generally differ. Area is the
+            % ring's own axial cross-section (Ac(3)/Ac(6), whichever is
+            % populated on either side) -- the lumped cap has no Ac of
+            % its own for this link, only the ring's footprint matters.
+            is_cap_axial = (a1==7 && a2==7);
+
             if use_log
                 cyl_idx=sat.node.globe(i).number;
                 Nt_cyl=sat.geom.cyl(cyl_idx).Nt;
@@ -43,6 +53,13 @@ for i=1:1:nn
 
                 R_i=0.5*log(ratio_i)/(sat.node.globe(i).prop_mech(3)*C_geom);
                 R_j=0.5*log(ratio_j)/(sat.node.globe(j).prop_mech(3)*C_geom);
+                G_c(i,j)=1/(R_i+R_j);
+                G_c(j,i)=G_c(i,j);
+            elseif is_cap_axial
+                Aj=max([sat.node.globe(i).Ac(3),sat.node.globe(i).Ac(6),...
+                         sat.node.globe(j).Ac(3),sat.node.globe(j).Ac(6)]);
+                R_i=(sat.node.globe(i).dz_local/2*10^-3)/(sat.node.globe(i).prop_mech(3)*Aj*10^-6);
+                R_j=(sat.node.globe(j).dz_local/2*10^-3)/(sat.node.globe(j).prop_mech(3)*Aj*10^-6);
                 G_c(i,j)=1/(R_i+R_j);
                 G_c(j,i)=G_c(i,j);
             else
