@@ -34,10 +34,11 @@ for i=1:1:nn
             if use_log
                 cyl_idx=sat.node.globe(i).number;
                 Nt_cyl=sat.geom.cyl(cyl_idx).Nt;
-                L_cyl=sat.geom.cyl(cyl_idx).L;
-                Nz_cyl=sat.geom.cyl(cyl_idx).Nz;
                 alfa=(360/Nt_cyl)/2;
-                dz=L_cyl/(Nz_cyl-1);
+                % dz_local is per-node (not sat.geom.cyl(cyl_idx).L/Nz),
+                % since a link may belong to a cap piece with its own
+                % axial thickness, different from the wall's dz.
+                dz=0.5*(sat.node.globe(i).dz_local+sat.node.globe(j).dz_local);
                 C_geom=2*sind(alfa)*dz*10^-3; % [m]: A(r)=C_geom*r for this cylinder's mesh
 
                 R_i=0.5*log(ratio_i)/(sat.node.globe(i).prop_mech(3)*C_geom);

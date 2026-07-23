@@ -1,11 +1,7 @@
-function [elem,Con] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L,Nt,Nr,Nz,total_nodes,R_int,sealed)
+function [elem,Con] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L,Nt,Nr,Nz,total_nodes,R_int)
 
 if nargin < 10 || isempty(R_int)
     R_int = 0;
-end
-
-if nargin < 11 || isempty(sealed)
-    sealed = false;
 end
 
 if R_int==0
@@ -52,7 +48,8 @@ elem=struct('ID',cell(1,n),...
             'Af',cell(1,n), ...
             'Ac',cell(1,n), ...
             'V',cell(1,n),...
-            'prop_mech',cell(1,n));
+            'prop_mech',cell(1,n),...
+            'dz_local',cell(1,n));
             %'prop_opt',cell(1,n));
 
 
@@ -82,7 +79,9 @@ for h=1:1:(Nz-1)
                  elem(m).node_diff=mean(Nodes3D(Central(h,:)),1);
                  %case1
                  Con(m,k(1:Nt,j+1,h))=2; % Nt connection (+j dir)
+                 if h<Nz-1
                  Con(m,k(i,j,h+1))=3;
+                 end
 
                  elem(m).Af=Afbc;
                  elem(m).Ac=Acbc;
@@ -109,7 +108,9 @@ for h=1:1:(Nz-1)
                  %case3
                  Con(m,k(1:Nt,j+1,h))=2; % Nt connection (+j dir)
                  Con(m,k(i,j,h-1))=6;
+                 if h<Nz-1
                  Con(m,k(i,j,h+1))=3;
+                 end
 
                  elem(m).Af=zeros(1,6);
                  elem(m).Ac=Aclc;
@@ -138,7 +139,9 @@ for h=1:1:(Nz-1)
                      if i==1
                          %case4
                      Con(m,k(i+1,j,h))=1;
+                     if h<Nz-1
                      Con(m,k(i,j,h+1))=3;
+                     end
                      Con(m,k(Nt,j,h))=4;
                      if j>1
                      Con(m,k(i,j-1,h))=5;
@@ -147,7 +150,9 @@ for h=1:1:(Nz-1)
                      elseif i==Nt
                          %case5
                      Con(m,k(i-Nt+1,j,h))=1;
+                     if h<Nz-1
                      Con(m,k(i,j,h+1))=3;
+                     end
                      Con(m,k(i-1,j,h))=4;
                      if j>1
                      Con(m,k(i,j-1,h))=5;
@@ -156,7 +161,9 @@ for h=1:1:(Nz-1)
                      else
                          %case6
                      Con(m,k(i+1,j,h))=1;
+                     if h<Nz-1
                      Con(m,k(i,j,h+1))=3;
+                     end
                      Con(m,k(i-1,j,h))=4;
                      if j>1
                      Con(m,k(i,j-1,h))=5;
@@ -174,7 +181,9 @@ for h=1:1:(Nz-1)
                          %case7
                      Con(m,k(i+1,j,h))=1;
                      Con(m,k(i,j+1,h))=2;
+                     if h<Nz-1
                      Con(m,k(i,j,h+1))=3;
+                     end
                      Con(m,k(Nt,j,h))=4;
                      if j>1
                      Con(m,k(i,j-1,h))=5;
@@ -184,7 +193,9 @@ for h=1:1:(Nz-1)
                          %case8
                      Con(m,k(i-Nt+1,j,h))=1;
                      Con(m,k(i,j+1,h))=2;
+                     if h<Nz-1
                      Con(m,k(i,j,h+1))=3;
+                     end
                      Con(m,k(i-1,j,h))=4;
                      if j>1
                      Con(m,k(i,j-1,h))=5;
@@ -194,7 +205,9 @@ for h=1:1:(Nz-1)
                          %case9
                      Con(m,k(i+1,j,h))=1;
                      Con(m,k(i,j+1,h))=2;
+                     if h<Nz-1
                      Con(m,k(i,j,h+1))=3;
+                     end
                      Con(m,k(i-1,j,h))=4;
                      if j>1
                      Con(m,k(i,j-1,h))=5;
@@ -383,69 +396,9 @@ for h=1:1:(Nz-1)
     end
 end
 
-if sealed && R_int>0
-    % Seal the bore at both ends with a lumped disc node (r=0..R_int),
-    % same pattern already used for the solid cylinder's central axis
-    % node: one merged node per end, connected radially (codes 2/5) to
-    % all Nt sectors of the innermost wall ring at that layer.
-    dz = L/(Nz-1);
-    a_in = Afb(1,5); % bore rim contact area, one sector (0 if R_int==0, unreachable here)
-    Vcap = pi*R_int^2*dz;
-
-    Ac_cap = zeros(1,6);
-    Ac_cap(2) = a_in*Nt;
-
-    Af_cap_bottom = zeros(1,6);
-    Af_cap_bottom(6) = pi*R_int^2;
-
-    Af_cap_top = zeros(1,6);
-    Af_cap_top(3) = pi*R_int^2;
-
-    idx_bottom = n+1;
-    idx_top = n+2;
-
-    % Bore-edge vertices (r=R_int), one per sector, tracing the disc
-    % outline of each cap -- needed by surf_global for area/center.
-    vertf_bottom = zeros(Nt,3);
-    vertf_top = zeros(Nt,3);
-    for i=1:1:Nt
-        vertf_bottom(i,:) = Nodes3D(Bricks(bfun(i,1,1),3),:);
-        vertf_top(i,:) = Nodes3D(Bricks(bfun(i,1,Nz-1),7),:);
-    end
-
-    % --- bottom cap (h=1) ---
-    elem(idx_bottom).type = 'cap';
-    elem(idx_bottom).face = 2;
-    elem(idx_bottom).node = mean(cat(1,elem(k(1:Nt,1,1)).node),1);
-    elem(idx_bottom).node_diff = elem(idx_bottom).node;
-    elem(idx_bottom).vertf = vertf_bottom;
-    elem(idx_bottom).Ac = Ac_cap;
-    elem(idx_bottom).Af = Af_cap_bottom;
-    elem(idx_bottom).V = Vcap;
-    for i=1:1:Nt
-        m = k(i,1,1);
-        Con(idx_bottom,m) = 2;
-        Con(m,idx_bottom) = 5;
-        elem(m).Ac(5) = a_in;   % was 0: now a real conduction contact with the cap
-        elem(m).Af(5) = 0;      % was a_in: no longer an exposed bore surface here
-    end
-
-    % --- top cap (h=Nz-1) ---
-    elem(idx_top).type = 'cap';
-    elem(idx_top).face = 1;
-    elem(idx_top).node = mean(cat(1,elem(k(1:Nt,1,Nz-1)).node),1);
-    elem(idx_top).node_diff = elem(idx_top).node;
-    elem(idx_top).vertf = vertf_top;
-    elem(idx_top).Ac = Ac_cap;
-    elem(idx_top).Af = Af_cap_top;
-    elem(idx_top).V = Vcap;
-    for i=1:1:Nt
-        m = k(i,1,Nz-1);
-        Con(idx_top,m) = 2;
-        Con(m,idx_top) = 5;
-        elem(m).Ac(5) = a_in;
-        elem(m).Af(5) = 0;
-    end
+dz = L/(Nz-1);
+for idx=1:1:n
+    elem(idx).dz_local = dz;
 end
 
 end

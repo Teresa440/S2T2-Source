@@ -229,13 +229,24 @@ if isfield(sat.geom.cyl(i),'R_int') && ~isempty(sat.geom.cyl(i).R_int)
 else
     R_int=0;
 end
-if isfield(sat.geom.cyl(i),'sealed') && ~isempty(sat.geom.cyl(i).sealed)
-    sealed=sat.geom.cyl(i).sealed;
+if isfield(sat.geom.cyl(i),'cap_thickness') && ~isempty(sat.geom.cyl(i).cap_thickness)
+    Thickness=sat.geom.cyl(i).cap_thickness;
 else
-    sealed=false;
+    Thickness=0;
 end
 
-zz=linspace(-L/2,L/2,Nz);
+do_caps = R_int>0 && Thickness>0;
+
+if do_caps
+    if L<=2*Thickness
+        error('Cylinder %d: L (%.4g) must be greater than 2*cap_thickness (%.4g).',i,L,2*Thickness);
+    end
+    L_wall = L-2*Thickness;
+else
+    L_wall = L;
+end
+
+zz=linspace(-L_wall/2,L_wall/2,Nz);
 r1=[1 0 0; 0 cosd(Angles(1)) -sind(Angles(1)); 0 sind(Angles(1)) cosd(Angles(1))];
 r2=[cosd(Angles(2)) 0 sind(Angles(2)); 0 1 0; -sind(Angles(2)) 0 cosd(Angles(2))];
 r3=[cosd(Angles(3)) -sind(Angles(3)) 0; sind(Angles(3)) cosd(Angles(3)) 0; 0 0 1];
@@ -267,8 +278,15 @@ for j=1:1:Nt+2
 end
 sat.geom.cyl(i).face=face;
 
-[elem,Connect] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L,Nt,Nr,Nz,total_nodes,R_int,sealed);
-total_nodes = numel(elem); % may include 2 extra sealing-cap nodes
+[elem,Connect] = node_cyl_creator3(Nodes3D,Central,Bricks,R,L_wall,Nt,Nr,Nz,total_nodes,R_int);
+
+if do_caps
+    [elem_cb,Con_cb] = build_cyl_cap(R_int,R,Nr,Nt,Thickness,rot,Center,-L_wall/2,false);
+    [elem_ct,Con_ct] = build_cyl_cap(R_int,R,Nr,Nt,Thickness,rot,Center, L_wall/2,true);
+    [elem,Connect] = stitch_cyl_wall_and_caps(elem,Connect,elem_cb,Con_cb,elem_ct,Con_ct,Nt,Nr,Nz);
+end
+
+total_nodes = numel(elem); % may include the 2 end-cap meshes
 for j=1:1:total_nodes
     elem(j).ID=j+node_counter;
     elem(j).ex_in='i';
