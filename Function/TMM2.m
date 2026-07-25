@@ -19,19 +19,60 @@ for i=1:1:nn
             % there (exact for circumferential/axial links, whose area is
             % constant along the path). Use the exact cylindrical (log) form
             % instead, unless one side is the fused axis node (r=0), where
-            % ln(r/0) is undefined and the linear/central formula is kept.
+            % ln(r/0) is undefined and a different formula is needed (see
+            % is_axis_link below).
             is_radial = (a1==2 && a2==5) || (a1==5 && a2==2);
             same_cyl = strcmp(sat.node.globe(i).item,'cyl') && strcmp(sat.node.globe(j).item,'cyl') ...
                        && sat.node.globe(i).number==sat.node.globe(j).number;
 
             use_log = false;
+            in0_i = false; in0_j = false;
             if is_radial && same_cyl
                 [ratio_i,in0_i] = radial_area_ratio(sat.node.globe(i));
                 [ratio_j,in0_j] = radial_area_ratio(sat.node.globe(j));
                 use_log = ~in0_i && ~in0_j;
             end
+            is_axis_link = is_radial && same_cyl && (in0_i || in0_j);
 
-            if use_log
+            if is_axis_link
+                % Fused solid-cylinder axis node (r=0, isothermal disc of
+                % radius a=R/Nr for that mesh's own innermost ring) <-> its
+                % neighboring ring. The log formula above diverges as
+                % r->0; the linear/central-difference formula previously
+                % used here instead is a *constant*, mesh-independent
+                % ~3x underestimate (verified numerically, does not
+                % shrink by refining Nr), because it treats radial
+                % conduction near the axis as if it had a constant
+                % cross-section (only exact for circumferential/axial
+                % links, not radial ones converging on r=0).
+                %
+                % Correct formula: exact steady-state conductance of a
+                % solid disc of radius a with a uniform (fictitious,
+                % energy-balancing) volumetric source, relating its
+                % volume-averaged temperature (consistent with C=m*cp)
+                % to its boundary temperature at r=a: G_disc=8*pi*k*L,
+                % independent of a. Split into Nt parallel branches, one
+                % per sector of the ring it connects to; the ring side
+                % keeps its usual log half-resistance, unchanged.
+                if in0_i
+                    axis_node=sat.node.globe(i); ring_node=sat.node.globe(j);
+                else
+                    axis_node=sat.node.globe(j); ring_node=sat.node.globe(i);
+                end
+                cyl_idx=ring_node.number;
+                Nt_cyl=sat.geom.cyl(cyl_idx).Nt;
+                alfa=(360/Nt_cyl)/2;
+
+                L_disc=axis_node.dz_local*10^-3; % [m]
+                R_core=Nt_cyl/(8*pi*axis_node.prop_mech(3)*L_disc);
+
+                [ratio_ring,~]=radial_area_ratio(ring_node);
+                C_geom=2*sind(alfa)*ring_node.dz_local*10^-3; % [m]: A(r)=C_geom*r
+                R_ring=0.5*log(ratio_ring)/(ring_node.prop_mech(3)*C_geom);
+
+                G_c(i,j)=1/(R_ring+R_core);
+                G_c(j,i)=G_c(i,j);
+            elseif use_log
                 cyl_idx=sat.node.globe(i).number;
                 Nt_cyl=sat.geom.cyl(cyl_idx).Nt;
                 alfa=(360/Nt_cyl)/2;
