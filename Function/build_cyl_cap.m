@@ -1,12 +1,18 @@
 function [elem_cap,Con_cap] = build_cyl_cap(R_int,R_out,Nr,Nt,Thickness,rot,Center,z_ref,is_top)
 %BUILD_CYL_CAP Full-disc end cap (radius R_out) for a hollow cylinder,
-%meshed at the same Nr/Nt resolution as the wall, made of two pieces:
-%  - annular layer (R_int..R_out), built with the same Circle_Mesh(R_out,
-%    Nr,Nt,R_int) call as the wall, so ring boundaries align exactly;
-%  - inner core (0..R_int), a solid mini-cylinder.
+%made of two pieces:
+%  - annular layer (R_int..R_out), meshed with the same Nr/Nt resolution
+%    as the wall (same Circle_Mesh(R_out,Nr,Nt,R_int) call), so ring
+%    boundaries align exactly;
+%  - a single lumped node for the inner disc (0..R_int): uniform
+%    temperature, capacitance = mass of the whole solid disc. The log
+%    formula used for ring-to-ring radial links diverges as r->0, so
+%    this region is NOT meshed into further rings; instead the lumped
+%    node is linked to the layer's innermost ring (fan-in, all Nt
+%    sectors) via a dedicated solid-disc conduction formula in TMM2.m
+%    (see the 'lc' node type there).
 %Both pieces have axial thickness Thickness (independent of the wall's
-%own dz) and are stitched together with a radial link (log-formula path
-%in TMM2.m, same pattern as a normal ring-to-ring or ring-to-axis link).
+%own dz).
 %
 %z_ref is the wall-facing boundary of the cap, in the wall's *local*
 %(pre-rotation) frame: for the bottom cap the disc spans
@@ -29,14 +35,30 @@ Nodes3D_l = Nodes3D_l*rot+Center;
 [elem_layer,Con_layer] = node_cyl_creator3(Nodes3D_l,[],Bricks_l,R_out,Thickness,Nt,Nr,2,total_nodes_l,R_int);
 n_layer = numel(elem_layer);
 
-%% Inner core (0..R_int), solid mini-cylinder
-[Nodes_c,Tri_c,Quad_c] = Circle_Mesh(R_int,Nr,Nt,0);
-[Nodes3D_c,Prisms_c,Bricks_c] = Mesh2D_to_Mesh3D(Nodes_c,Tri_c,Quad_c,zz);
-[Central_c] = Tri_to_Poly(Prisms_c,Nt,2);
-total_nodes_c = length(Central_c(:,1))+length(Bricks_c(:,1));
-Nodes3D_c = Nodes3D_c*rot+Center;
-[elem_core,Con_core] = node_cyl_creator3(Nodes3D_c,Central_c,Bricks_c,R_int,Thickness,Nt,Nr,2,total_nodes_c,0);
-n_core = numel(elem_core);
+%% Central lumped node (0..R_int), single isothermal node
+% Whole solid disc as one node (not a ring mesh): position at the axis,
+% "bottom-face" convention (z=zz(1)) like every other cap element built
+% below, later moved to the volumetric center by the shift block. Af(6)
+% carries the disc's full exposed base area (pi*R_int^2); Ac is left at
+% zero since the radial link to the layer is computed directly in
+% TMM2.m, not from Ac/Af areas.
+theta = (0:Nt-1)'*(360/Nt);
+vertf_local = [R_int*cosd(theta), R_int*sind(theta), repmat(zz(1),Nt,1)];
+
+elem_core = struct( ...
+    'ID',[],'ex_in',[],'item',[],'number',[],'ID_item',[], ...
+    'node',[0 0 zz(1)]*rot+Center, ...
+    'node_diff',[0 0 zz(1)]*rot+Center, ...
+    'type','lc', ...
+    'face',2, ...
+    'vertf',vertf_local*rot+Center, ...
+    'Af',[0 0 0 0 0 pi*R_int^2], ...
+    'Ac',zeros(1,6), ...
+    'V',pi*R_int^2*Thickness, ...
+    'prop_mech',[], ...
+    'dz_local',Thickness);
+Con_core = 0;
+n_core = 1;
 
 %% Top cap: swap axial indices (3<->6), since Nz=2 always yields a
 % "bottom-type" (h==1) layer regardless of which physical end it is.
@@ -77,39 +99,24 @@ Con_cap = zeros(n_layer+n_core);
 Con_cap(1:n_layer,1:n_layer) = Con_layer;
 Con_cap(n_layer+1:end,n_layer+1:end) = Con_core;
 
-%% Radial stitching: layer's innermost ring (j=1) <-> core's outermost ring
-% Same index formulas used internally by node_cyl_creator3, replicated
-% here since they are not returned by that function.
-k_layer=@(i,j,h) Nt*Nr*(h-1) + (j-1)*Nt + i;                      % R_int>0 branch
-k_core=@(i,j,h) (Nt*(Nr-1)+1)*(h-1) + (j-2)*Nt*(j>1) + 1 + i*(j>1); % R_int==0 branch
+%% Radial stitching: layer's innermost ring (j=1) <-> central lumped node
+% Same index formula used internally by node_cyl_creator3 for the layer,
+% replicated here since it is not returned by that function. All Nt
+% sectors of the layer's bore-facing ring fan into the single lumped
+% node (type 'lc'); TMM2.m recognizes the pair via the node type and
+% uses the solid-disc conduction formula instead of the log one, which
+% diverges as r->0.
+k_layer=@(i,j,h) Nt*Nr*(h-1) + (j-1)*Nt + i;
 
-idx_layer_inner = k_layer(1:Nt,1,1);      % layer's bore-facing ring, local indices
-idx_core_outer  = k_core(1:Nt,Nr,1);      % core's outermost ring, local indices (offset by n_layer below)
+idx_layer_inner = k_layer(1:Nt,1,1); % layer's bore-facing ring, local indices
+m_core = n_layer+1;
 
 for ii=1:1:Nt
     m_layer = idx_layer_inner(ii);
-    m_core  = idx_core_outer(ii)+n_layer;
 
     a_in = elem_cap(m_layer).Af(5); % bore contact area, per sector (external before stitching)
     elem_cap(m_layer).Ac(5) = a_in;
     elem_cap(m_layer).Af(5) = 0;
-
-    a_out = elem_cap(m_core).Af(2); % core's outer contact area, per sector (external before stitching)
-    elem_cap(m_core).Ac(2) = a_out;
-    elem_cap(m_core).Af(2) = 0;
-
-    % The core's outermost ring was built as if it were a standalone
-    % solid cylinder of radius R_int, so its 's'-type nodes carry a
-    % second polygon (vertf rows 5:8) for what was then a real lateral
-    % exterior surface at r=R_int. That boundary is now the internal
-    % interface with the annular layer, not an exterior surface -- drop
-    % the lateral polygon (keep only the flat wedge face, rows 1:4) so
-    % plot_GMM4 doesn't render a phantom small cylinder there.
-    if strcmp(elem_cap(m_core).type,'s')
-        elem_cap(m_core).type = 'cq';
-        elem_cap(m_core).vertf = elem_cap(m_core).vertf(1:4,:);
-        elem_cap(m_core).face = elem_cap(m_core).face(1); % drop the lateral face id, keep the top/bottom one
-    end
 
     Con_cap(m_layer,m_core) = 5; % layer looking inward, toward the core
     Con_cap(m_core,m_layer) = 2; % core looking outward, toward the layer

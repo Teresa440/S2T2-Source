@@ -23,15 +23,45 @@ for i=1:1:nn
             is_radial = (a1==2 && a2==5) || (a1==5 && a2==2);
             same_cyl = strcmp(sat.node.globe(i).item,'cyl') && strcmp(sat.node.globe(j).item,'cyl') ...
                        && sat.node.globe(i).number==sat.node.globe(j).number;
+            is_lc = strcmp(sat.node.globe(i).type,'lc') || strcmp(sat.node.globe(j).type,'lc');
 
             use_log = false;
-            if is_radial && same_cyl
+            if is_radial && same_cyl && ~is_lc
                 [ratio_i,in0_i] = radial_area_ratio(sat.node.globe(i));
                 [ratio_j,in0_j] = radial_area_ratio(sat.node.globe(j));
                 use_log = ~in0_i && ~in0_j;
             end
 
-            if use_log
+            if is_radial && same_cyl && is_lc
+                % Cap's central lumped node (whole solid disc, r=0..R_int)
+                % <-> annular layer's bore-facing ring: the log formula
+                % above diverges as r->0, so the lumped side instead uses
+                % the exact steady-state conductance of a solid disc with
+                % a uniform (fictitious, energy-balancing) volumetric
+                % source, relating its volume-averaged temperature to its
+                % boundary temperature at r=R_int: G_disc=8*pi*k*L. Split
+                % into Nt parallel branches, one per sector of the ring
+                % it fans into. The ring side keeps its usual log
+                % half-resistance, unchanged, in series with this one.
+                if strcmp(sat.node.globe(i).type,'lc')
+                    lc=sat.node.globe(i); ring=sat.node.globe(j);
+                else
+                    lc=sat.node.globe(j); ring=sat.node.globe(i);
+                end
+                cyl_idx=ring.number;
+                Nt_cyl=sat.geom.cyl(cyl_idx).Nt;
+                alfa=(360/Nt_cyl)/2;
+
+                L_disc=lc.dz_local*10^-3; % [m]
+                R_core=Nt_cyl/(8*pi*lc.prop_mech(3)*L_disc);
+
+                [ratio_ring,~]=radial_area_ratio(ring);
+                C_geom=2*sind(alfa)*ring.dz_local*10^-3; % [m]: A(r)=C_geom*r
+                R_ring=0.5*log(ratio_ring)/(ring.prop_mech(3)*C_geom);
+
+                G_c(i,j)=1/(R_ring+R_core);
+                G_c(j,i)=G_c(i,j);
+            elseif use_log
                 cyl_idx=sat.node.globe(i).number;
                 Nt_cyl=sat.geom.cyl(cyl_idx).Nt;
                 alfa=(360/Nt_cyl)/2;
