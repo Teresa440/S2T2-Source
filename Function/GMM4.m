@@ -173,6 +173,18 @@ if th>0
     % builder already used for the external Structure box.
     Th=repmat(th,1,6);
     [elem,total_nodes,Connect] = node_box_creator2(Center,L,N,Angles,Th);
+    % node_box_creator2 stores each exposed area twice in Af (indices
+    % 1&4, 2&5, 3&6 always equal -- verified: sum(Af) over a whole shell
+    % is exactly 2x its true external area). The Structure ('ex') item,
+    % which uses the same builder, already corrects for this in
+    % opt_prop.m (Af_tot=sum(Af)/2); halve it here instead, at the
+    % source, so this parallelepiped's Af_tot falls into opt_prop.m's
+    % generic sum(Af) branch already correct -- node_solid_creator2
+    % (th==0 branch) does not have this duplication, so it must stay
+    % untouched.
+    for j=1:1:total_nodes
+        elem(j).Af = elem(j).Af/2;
+    end
 else
     [elem,total_nodes,Connect] = node_solid_creator2(Center,L,N,Angles);
 end
