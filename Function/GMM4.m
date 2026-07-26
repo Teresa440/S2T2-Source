@@ -185,6 +185,23 @@ if th>0
     for j=1:1:total_nodes
         elem(j).Af = elem(j).Af/2;
     end
+    % node_box_creator2 also computes each node's V as (its own local
+    % footprint area)*(its own wall thickness), face by face -- exact
+    % for a lone flat panel, but at edges/corners two or three walls'
+    % slabs geometrically overlap, so summing them independently
+    % double/triple-counts that shared material. Verified: the total
+    % sum(V) over a whole shell equals exactly (external area)*thickness
+    % (the naive, uncorrected value), independent of mesh resolution --
+    % not a discretization error, a fixed overcount that grows with
+    % th/L (e.g. +30% for th=10 on a 100x80x60 box, +0.3% for th=0.1).
+    % Exact total volume of a box shell (thickness Th(k) on face k,
+    % faces 1&3 along y, 2&4 along x, 5&6 along z per face_box_creator's
+    % normals) = outer volume - inner cavity volume:
+    V_true_total = L(1)*L(2)*L(3) - (L(1)-Th(2)-Th(4))*(L(2)-Th(1)-Th(3))*(L(3)-Th(5)-Th(6));
+    V_naive_total = sum([elem.V]);
+    for j=1:1:total_nodes
+        elem(j).V = elem(j).V*(V_true_total/V_naive_total);
+    end
 else
     [elem,total_nodes,Connect] = node_solid_creator2(Center,L,N,Angles);
 end
