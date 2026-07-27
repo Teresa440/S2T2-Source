@@ -60,8 +60,7 @@ if R_int==0
     k=@(i,j,h) (Nt*(Nr-1) + 1)*(h-1) + (j-2)*Nt*(j>1) + 1 + i*(j>1);
     bfun=@(i,j,h) i+(j-2)*Nt+(h-1)*Nt*(Nr-1);
 else
-    % No central node: every ring (including j==1, the inner bore ring)
-    % is indexed uniformly, Nt nodes per ring, Nr rings per axial layer.
+
     k=@(i,j,h) Nt*Nr*(h-1) + (j-1)*Nt + i;
     bfun=@(i,j,h) i+(j-1)*Nt+(h-1)*Nt*Nr;
 end

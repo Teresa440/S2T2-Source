@@ -17,7 +17,7 @@ end
 end
 
 if R_int==0
-    % Solid cylinder: single node on the axis
+    % Solid cylinder
     Nodes(c+1,1)=0;
     Nodes(c+1,2)=0;
 else
@@ -64,7 +64,7 @@ Quads(d+1,4)=Nt*(j-1)+i+1;
 end
 
 if R_int>0
-    % Innermost band: ring at R_int (indices c+1..c+Nt) to ring 1 (indices 1..Nt)
+
     Quads_in=[];
     for i=1:1:Nt-1
     Quads_in(i,1)=i;

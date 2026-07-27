@@ -1,12 +1,12 @@
 function [Afb,Aft,Afl,Acb,Act,Acl,V] = cylinder_areas(R,Nr,Nt,L,Nz,R_int)
 
-if nargin < 6 || isempty(R_int)   %check input
+if nargin < 6 || isempty(R_int)  
     R_int = 0;
 end
 
-a=(R-R_int)/Nr; %size of the rings
+a=(R-R_int)/Nr; 
 alfa=(360/Nt)/2;
-dz=L/(Nz-1); %size of the layers
+dz=L/(Nz-1); 
  
 Afb=zeros(Nr,6);
 Aft=zeros(Nr,6);
@@ -39,8 +39,6 @@ for j=1:1:Nr
 
 end
 
-% Outer lateral surface (ring Nr): the +r face is the real external
-% surface of the cylinder, not a conduction contact.
 Afb(Nr,2)=A(2);
 Aft(Nr,2)=A(2);
 Afl(Nr,2)=A(2);
@@ -50,9 +48,7 @@ Act(Nr,2)=0;
 Acl(Nr,2)=0;
 
 if R_int>0
-    % Inner bore surface (ring 1): the -r face is the real internal
-    % surface of the hollow cylinder, not a conduction contact towards
-    % a non-existent ring 0.
+    % Inner surface (ring 1)
     a_in=2*R_int*sind(alfa)*dz;
 
     Afb(1,5)=a_in;

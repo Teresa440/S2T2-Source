@@ -13,13 +13,7 @@ for i=1:1:nn
             a1=C(i,j);
             a2=C(j,i);
 
-            % Radial (+-r) links between two shells of the same cylinder have
-            % a cross-section that varies with radius along the path: the
-            % linear finite-difference formula below is only an approximation
-            % there (exact for circumferential/axial links, whose area is
-            % constant along the path). Use the exact cylindrical (log) form
-            % instead, unless one side is the fused axis node (r=0), where
-            % ln(r/0) is undefined and the linear/central formula is kept.
+          
             is_radial = (a1==2 && a2==5) || (a1==5 && a2==2);
             same_cyl = strcmp(sat.node.globe(i).item,'cyl') && strcmp(sat.node.globe(j).item,'cyl') ...
                        && sat.node.globe(i).number==sat.node.globe(j).number;
@@ -35,9 +29,7 @@ for i=1:1:nn
                 cyl_idx=sat.node.globe(i).number;
                 Nt_cyl=sat.geom.cyl(cyl_idx).Nt;
                 alfa=(360/Nt_cyl)/2;
-                % dz_local is per-node (not sat.geom.cyl(cyl_idx).L/Nz),
-                % since a link may belong to a cap piece with its own
-                % axial thickness, different from the wall's dz.
+            
                 dz=0.5*(sat.node.globe(i).dz_local+sat.node.globe(j).dz_local);
                 C_geom=2*sind(alfa)*dz*10^-3; % [m]: A(r)=C_geom*r for this cylinder's mesh
 
@@ -70,10 +62,7 @@ end
 end
 
 function [ratio,is_axis] = radial_area_ratio(node)
-% Outward/inward radial face-area ratio of a cylindrical shell element.
-% Ac holds the conduction area unless that face is a real external
-% boundary (outer lateral surface, or inner bore for a hollow cylinder),
-% in which case the same area is stored in Af instead.
+
 a_out=node.Ac(2);
 if a_out==0
     a_out=node.Af(2);
