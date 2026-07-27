@@ -169,34 +169,11 @@ end
 sat.geom.parall(i).face=face;
 
 if th>0
-    % Hollow shell (uniform wall thickness on all 6 faces), same mesh
-    % builder already used for the external Structure box.
-    Th=repmat(th,1,6);
-    [elem,total_nodes,Connect] = node_box_creator2(Center,L,N,Angles,Th);
-    % node_box_creator2 stores each exposed area twice in Af (indices
-    % 1&4, 2&5, 3&6 always equal -- verified: sum(Af) over a whole shell
-    % is exactly 2x its true external area). The Structure ('ex') item,
-    % which uses the same builder, already corrects for this in
-    % opt_prop.m (Af_tot=sum(Af)/2); halve it here instead, at the
-    % source, so this parallelepiped's Af_tot falls into opt_prop.m's
-    % generic sum(Af) branch already correct -- node_solid_creator2
-    % (th==0 branch) does not have this duplication, so it must stay
-    % untouched.
+    
     for j=1:1:total_nodes
         elem(j).Af = elem(j).Af/2;
     end
-    % node_box_creator2 also computes each node's V as (its own local
-    % footprint area)*(its own wall thickness), face by face -- exact
-    % for a lone flat panel, but at edges/corners two or three walls'
-    % slabs geometrically overlap, so summing them independently
-    % double/triple-counts that shared material. Verified: the total
-    % sum(V) over a whole shell equals exactly (external area)*thickness
-    % (the naive, uncorrected value), independent of mesh resolution --
-    % not a discretization error, a fixed overcount that grows with
-    % th/L (e.g. +30% for th=10 on a 100x80x60 box, +0.3% for th=0.1).
-    % Exact total volume of a box shell (thickness Th(k) on face k,
-    % faces 1&3 along y, 2&4 along x, 5&6 along z per face_box_creator's
-    % normals) = outer volume - inner cavity volume:
+    
     V_true_total = L(1)*L(2)*L(3) - (L(1)-Th(2)-Th(4))*(L(2)-Th(1)-Th(3))*(L(3)-Th(5)-Th(6));
     V_naive_total = sum([elem.V]);
     for j=1:1:total_nodes
@@ -288,8 +265,7 @@ if R_int==0
     [Central] = Tri_to_Poly(Prisms,Nt,Nz);
     total_nodes=length(Central(:,1))+length(Bricks(:,1));
 else
-    % Hollow cylinder: no central column, every ring (including the
-    % inner bore ring) is meshed as a normal brick ring.
+   
     Central=[];
     total_nodes=length(Bricks(:,1));
 end
