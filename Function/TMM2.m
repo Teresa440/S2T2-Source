@@ -18,6 +18,10 @@ for i=1:1:nn
             same_cyl = strcmp(sat.node.globe(i).item,'cyl') && strcmp(sat.node.globe(j).item,'cyl') ...
                        && sat.node.globe(i).number==sat.node.globe(j).number;
 
+            is_radial_sph = (a1==3 && a2==6) || (a1==6 && a2==3);
+            same_sphcap = strcmp(sat.node.globe(i).item,'sphcap') && strcmp(sat.node.globe(j).item,'sphcap') ...
+                          && sat.node.globe(i).number==sat.node.globe(j).number;
+
             use_log = false;
             if is_radial && same_cyl
                 [ratio_i,in0_i] = radial_area_ratio(sat.node.globe(i));
@@ -25,16 +29,33 @@ for i=1:1:nn
                 use_log = ~in0_i && ~in0_j;
             end
 
+            use_sph = is_radial_sph && same_sphcap;
+
             if use_log
                 cyl_idx=sat.node.globe(i).number;
                 Nt_cyl=sat.geom.cyl(cyl_idx).Nt;
                 alfa=(360/Nt_cyl)/2;
-            
+
                 dz=0.5*(sat.node.globe(i).dz_local+sat.node.globe(j).dz_local);
                 C_geom=2*sind(alfa)*dz*10^-3; % [m]: A(r)=C_geom*r for this cylinder's mesh
 
                 R_i=0.5*log(ratio_i)/(sat.node.globe(i).prop_mech(3)*C_geom);
                 R_j=0.5*log(ratio_j)/(sat.node.globe(j).prop_mech(3)*C_geom);
+                G_c(i,j)=1/(R_i+R_j);
+                G_c(j,i)=G_c(i,j);
+            elseif use_sph
+                % G_r = k*dOmega*r_i*r_o/(r_o-r_i) (Holman Eq. 2-10, hollow
+                % sphere), spezzata in due meta' (nodo i, nodo j) come per
+                % il ramo cilindrico -- ciascun nodo usa il fattore
+                % geometrico della propria cella, gia' incluso dOmega_medio
+                % di layer in Geom_r (sphcap_areas.m), qui riusato via
+                % dz_local. Convergenza verificata a parte (integrale 1D
+                % indipendente, errore ~1/Nr_cap^2).
+                Geom_i=sat.node.globe(i).dz_local*10^-3; % [m]
+                Geom_j=sat.node.globe(j).dz_local*10^-3; % [m]
+
+                R_i=0.5/(sat.node.globe(i).prop_mech(3)*Geom_i);
+                R_j=0.5/(sat.node.globe(j).prop_mech(3)*Geom_j);
                 G_c(i,j)=1/(R_i+R_j);
                 G_c(j,i)=G_c(i,j);
             else
