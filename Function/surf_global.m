@@ -69,7 +69,7 @@ end
 
 for i=1:1:length(surfaces)
     cont=0;
-    if strcmp(surfaces(i).item,'cyl')==0
+    if strcmp(surfaces(i).item,'cyl')==0 && strcmp(surfaces(i).item,'sphcap')==0
         for j=1:1:length(surfaces(i).elem)
             if strcmp(surfaces(i).elem(j).type,'v')==1
                 surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).node];
@@ -206,6 +206,8 @@ surf_for_MCRT_ext(ind)=[];
 ind=cellfun(@(v)any(strcmp(v,'paral')==1),{surf_for_MCRT_ext.item});
 surf_for_MCRT_ext(ind)=[];
 ind=cellfun(@(v)any(strcmp(v,'cyl')==1),{surf_for_MCRT_ext.item});
+surf_for_MCRT_ext(ind)=[];
+ind=cellfun(@(v)any(strcmp(v,'sphcap')==1),{surf_for_MCRT_ext.item});
 surf_for_MCRT_ext(ind)=[];
 
 for i=1:1:length(surf_for_MCRT_ext)

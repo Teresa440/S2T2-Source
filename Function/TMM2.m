@@ -59,7 +59,21 @@ for i=1:1:nn
                 G_c(i,j)=1/(R_i+R_j);
                 G_c(j,i)=G_c(i,j);
             else
-                vect=sat.node.globe(i).node-sat.node.globe(j).node;
+                % Cucitura parete-calotta: le due mesh condividono
+                % esattamente lo stesso confine per costruzione (bordo
+                % piatto, Fase 6) -- 'node' e' posizionato apposta sulla
+                % faccia di bordo per entrambi i lati e coinciderebbe
+                % esattamente (L=0, G_c->Inf). 'node_diff' (baricentro
+                % vero, media di tutti gli 8 vertici) e' gia' calcolato
+                % da entrambi i node creator per ogni elemento e non
+                % soffre di questo problema.
+                is_stitch = (strcmp(sat.node.globe(i).item,'cyl') && strcmp(sat.node.globe(j).item,'sphcap')) ...
+                         || (strcmp(sat.node.globe(i).item,'sphcap') && strcmp(sat.node.globe(j).item,'cyl'));
+                if is_stitch
+                    vect=sat.node.globe(i).node_diff-sat.node.globe(j).node_diff;
+                else
+                    vect=sat.node.globe(i).node-sat.node.globe(j).node;
+                end
                 L=norm(vect)/2;
                 A1=sat.node.globe(i).Ac(a1);
                 A2=sat.node.globe(j).Ac(a2);

@@ -21,6 +21,9 @@ for i=1:1:sat.node.total_node
   elseif strcmp(sat.node.globe(i).item,'cyl')==1
       num=sat.node.globe(i).number;
       sat.node.globe(i).prop_mech=sat.prop.cyl(num).mech;
+  elseif strcmp(sat.node.globe(i).item,'sphcap')==1
+      num=sat.node.globe(i).number;
+      sat.node.globe(i).prop_mech=sat.prop.cyl(num).mech; % stesso materiale della parete a cui e' attaccata
   end
 
 
