@@ -276,12 +276,15 @@ end
 
 Nodes3D=Nodes3D*rot+Center;
 
-[face] = cylinder_face(Nodes3D,Nt,Nr,Nz,R,zz,Angles,Center);
-for j=1:1:Nt+2
+wall_nfaces = (Nt+2) + (R_int>0)*Nt; % +Nt per il foro interno, solo se cavo --
+                                      % vedi cylinder_face.m/node_cyl_creator3.m
+[face] = cylinder_face(Nodes3D,Nt,Nr,Nz,R,zz,Angles,Center,R_int);
+for j=1:1:wall_nfaces
     face(j).ID=face(j).ID+face_counter;
     if j <= 2 % top and bottom bases of the cylinder
         face(j).prop_opt=sat.prop.cyl(i).opt(j,:);
-    else % lateral surfaces
+    else % lateral surfaces (esterne e, se presenti, interne -- stessa
+         % proprieta' ottica, nessuna riga dedicata nella GUI oggi)
         face(j).prop_opt=sat.prop.cyl(i).opt(3,:);
     end
 end
@@ -330,9 +333,9 @@ sat.geom.globe=[sat.geom.globe,face];
 
 if do_caps
     % Superfici per i due blocchi di ID riservati in build_sphcap.m
-    % (bottom: +Nt+2, top: +Nt+2+block_cap). Normali generate da
-    % sphcap_face.m: esatte per anello theta/blocco phi sul guscio,
-    % esatte (costanti) sul bordo. Proprieta' ottiche riprese da
+    % (bottom: +wall_nfaces, top: +wall_nfaces+block_cap). Normali
+    % generate da sphcap_face.m: esatte per anello theta/blocco phi sul
+    % guscio, esatte (costanti) sul bordo. Proprieta' ottiche riprese da
     % sat.prop.cyl(i).opt, stessa convenzione della parete (righe 1/2
     % basi, riga 3 laterale).
     n_phi_blocks = ceil(Nt/phi_block_size);
@@ -342,7 +345,7 @@ if do_caps
         is_top = (cap_side==2);
         [cap_face] = sphcap_face(Nt,Ntheta_cap,phi_block_size,rot,Center,is_top);
         for jf=1:1:block_cap
-            cap_face(jf).ID = cap_face(jf).ID + face_counter + (Nt+2) + is_top*block_cap;
+            cap_face(jf).ID = cap_face(jf).ID + face_counter + wall_nfaces + is_top*block_cap;
             if jf<=n_shell_slots
                 cap_face(jf).prop_opt = sat.prop.cyl(i).opt(cap_side,:);
             else
@@ -368,9 +371,9 @@ C=[C,zer1;zer2,Connect];
 node_counter=node_counter+total_nodes;
 
 if do_caps
-    face_counter=face_counter+(Nt+2)+2*block_cap; % parete + due blocchi calotta (vedi build_sphcap.m)
+    face_counter=face_counter+wall_nfaces+2*block_cap; % parete + due blocchi calotta (vedi build_sphcap.m)
 else
-    face_counter=face_counter+2+Nt;
+    face_counter=face_counter+wall_nfaces;
 end
 end
 end

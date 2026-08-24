@@ -39,15 +39,19 @@ Nodes3D = Nodes3D*rot + Center;
 % mescolerebbe gusci fisicamente opposti in un'unica superficie.
 %
 % Lo shift deve corrispondere alla POSIZIONE reale in sat.geom.globe, non
-% solo essere "disgiunto": la parete occupa sempre Nt+2 slot (dimensione
-% fissa, indipendente da phi_block_size/Ntheta), quindi il tappo inferiore
-% parte subito dopo (+Nt+2) e quello superiore dopo il blocco del tappo
-% inferiore (+Nt+2+block) -- vedi sphcap_face.m per lo stesso conteggio
-% n_shell_slots/block usato per generare le normali corrispondenti.
+% solo essere "disgiunto": la parete occupa sempre wall_nfaces slot
+% (dimensione fissa, indipendente da phi_block_size/Ntheta -- ma dipende
+% da R_int: +Nt in piu' se il cilindro e' cavo e ha anche il foro
+% interno esposto, vedi cylinder_face.m/node_cyl_creator3.m), quindi il
+% tappo inferiore parte subito dopo (+wall_nfaces) e quello superiore
+% dopo il blocco del tappo inferiore (+wall_nfaces+block) -- vedi
+% sphcap_face.m per lo stesso conteggio n_shell_slots/block usato per
+% generare le normali corrispondenti.
+wall_nfaces = (Nt+2) + (R_int>0)*Nt; % do_caps richiede R_int>0, quindi qui e' sempre 2*Nt+2
 n_phi_blocks = ceil(Nt/phi_block_size);
 n_shell_slots = 1 + (Ntheta-1)*n_phi_blocks; % apice: 1 solo slot, non n_phi_blocks -- vedi node_sphcap_creator.m
 block = 2*n_shell_slots+Nt;
-face_shift = (Nt+2) + is_top*block; % bottom -> +(Nt+2), top -> +(Nt+2)+block
+face_shift = wall_nfaces + is_top*block; % bottom -> +wall_nfaces, top -> +wall_nfaces+block
 for idx=1:1:numel(elem_cap)
     if ~isempty(elem_cap(idx).face)
         elem_cap(idx).face = elem_cap(idx).face + face_shift;

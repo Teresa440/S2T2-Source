@@ -1,4 +1,7 @@
-function [face] = cylinder_face(Nodes3D,Nt,Nr,Nz,R,zz,an,C)
+function [face] = cylinder_face(Nodes3D,Nt,Nr,Nz,R,zz,an,C,R_int)
+if nargin<9 || isempty(R_int)
+    R_int = 0;
+end
 id1=size(Nodes3D,1)/Nz; % nodes per axial layer (Nt*Nr+1 solid, Nt*(Nr+1) hollow)
 id2=size(Nodes3D,1);
 alfa=360/Nt;
@@ -6,12 +9,13 @@ r1=[1 0 0; 0 cosd(an(1)) -sind(an(1)); 0 sind(an(1)) cosd(an(1))];
 r2=[cosd(an(2)) 0 sind(an(2)); 0 1 0; -sind(an(2)) 0 cosd(an(2))];
 r3=[cosd(an(3)) -sind(an(3)) 0; sind(an(3)) cosd(an(3)) 0; 0 0 1];
 rot=r3*r2*r1;
-face=struct( 'ID',cell(1,Nt+2),...
-'norm',cell(1,Nt+2),...
-'mesh',cell(1,Nt+2),...
-'gridX',cell(1,Nt+2),...
-'gridY',cell(1,Nt+2),...
-'gridZ',cell(1,Nt+2));
+n_faces = (Nt+2) + (R_int>0)*Nt; % +Nt per il foro interno, solo se cavo
+face=struct( 'ID',cell(1,n_faces),...
+'norm',cell(1,n_faces),...
+'mesh',cell(1,n_faces),...
+'gridX',cell(1,n_faces),...
+'gridY',cell(1,n_faces),...
+'gridZ',cell(1,n_faces));
 % bottom face
 face(1).ID=1;
 face(1).norm=[0 0 1];
@@ -41,7 +45,36 @@ for j=1:1:Nz
 end
 end
 face(c+1).mesh=[repmat(nod(end,:),Nz,1) zz']*rot+C;
-face(c+1).mesh=[face(end).mesh;[repmat(nod(1,:),Nz,1) zz']*rot+C];
+face(c+1).mesh=[face(c+1).mesh;[repmat(nod(1,:),Nz,1) zz']*rot+C];
+
+if R_int>0
+    % Foro interno: stessa formula azimutale della parete esterna, solo
+    % invertita (punta verso il centro, non verso l'esterno) -- a
+    % differenza della calotta sferica, per un cilindro la normale del
+    % foro non varia con l'altezza ne' col raggio, quindi la formula per
+    % settore e' esatta, non un'approssimazione.
+    face(Nt+3).ID=Nt+3;
+    face(Nt+3).norm=-face(3).norm;
+    for i=1:1:Nt-1
+        face(i+Nt+3).ID=i+Nt+3;
+        face(i+Nt+3).norm=-face(i+3).norm;
+    end
+    nod_in=zeros(Nt,2);
+    for i=1:1:Nt
+        nod_in(i,1)=R_int*cosd(360*(i-1)/Nt);
+        nod_in(i,2)=R_int*sind(360*(i-1)/Nt);
+    end
+    for i=1:1:Nt-1
+    for j=1:1:Nz
+            c2=i+Nt+2;
+            face(c2).mesh(j,:)=[nod_in(i,:) zz(j)]*rot+C;
+            face(c2).mesh(j+Nz,:)=[nod_in(i+1,:) zz(j)]*rot+C;
+    end
+    end
+    face(c2+1).mesh=[repmat(nod_in(end,:),Nz,1) zz']*rot+C;
+    face(c2+1).mesh=[face(c2+1).mesh;[repmat(nod_in(1,:),Nz,1) zz']*rot+C];
+end
+
 for i=1:1:length(face)
     face(i).norm=face(i).norm*rot;
 for j=1:1:length(face(i).mesh(:,1))

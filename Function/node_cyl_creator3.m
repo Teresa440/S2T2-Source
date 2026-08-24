@@ -124,7 +124,11 @@ for h=1:1:(Nz-1)
 
 
                  if j==Nr
-                     elem(m).face=[2,i+2];
+                     if j==1 && R_int>0
+                         elem(m).face=[2,i+2,i+2+Nt]; % Nr==1: giunzione tripla tappo/esterno/interno
+                     else
+                         elem(m).face=[2,i+2];
+                     end
                      elem(m).type='s';
                      b=bfun(i,j,h);
                      elem(m).node=mean(Nodes3D(Bricks(b,1:2),:),1);
@@ -133,6 +137,12 @@ for h=1:1:(Nz-1)
                      elem(m).vertf(6,:)=Nodes3D(Bricks(b,2),:);
                      elem(m).vertf(7,:)=Nodes3D(Bricks(b,6),:);
                      elem(m).vertf(8,:)=Nodes3D(Bricks(b,5),:);
+                     if j==1 && R_int>0
+                     elem(m).vertf(9,:)=Nodes3D(Bricks(b,4),:);
+                     elem(m).vertf(10,:)=Nodes3D(Bricks(b,3),:);
+                     elem(m).vertf(11,:)=Nodes3D(Bricks(b,7),:);
+                     elem(m).vertf(12,:)=Nodes3D(Bricks(b,8),:);
+                     end
                      elem(m).node_diff=mean(Nodes3D(Bricks(b,:)),1);
 
                      if i==1
@@ -160,6 +170,55 @@ for h=1:1:(Nz-1)
                      else
                          %case6
                      Con(m,k(i+1,j,h))=1;
+                     if h<Nz-1
+                     Con(m,k(i,j,h+1))=3;
+                     end
+                     Con(m,k(i-1,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+                     end
+
+                 elseif j==1 && R_int>0
+                     elem(m).face=[2,i+2+Nt];
+                     elem(m).type='s';
+                     b=bfun(i,j,h);
+                     elem(m).node=mean(Nodes3D(Bricks(b,3:4),:),1);
+                     elem(m).vertf(1:4,:)=Nodes3D(Bricks(b,1:4),:);
+                     elem(m).vertf(5,:)=Nodes3D(Bricks(b,4),:);
+                     elem(m).vertf(6,:)=Nodes3D(Bricks(b,3),:);
+                     elem(m).vertf(7,:)=Nodes3D(Bricks(b,7),:);
+                     elem(m).vertf(8,:)=Nodes3D(Bricks(b,8),:);
+                     elem(m).node_diff=mean(Nodes3D(Bricks(b,:)),1);
+
+                     if i==1
+                         %case7b
+                     Con(m,k(i+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
+                     if h<Nz-1
+                     Con(m,k(i,j,h+1))=3;
+                     end
+                     Con(m,k(Nt,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+
+                     elseif i==Nt
+                         %case8b
+                     Con(m,k(i-Nt+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
+                     if h<Nz-1
+                     Con(m,k(i,j,h+1))=3;
+                     end
+                     Con(m,k(i-1,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+
+                     else
+                         %case9b
+                     Con(m,k(i+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
                      if h<Nz-1
                      Con(m,k(i,j,h+1))=3;
                      end
@@ -220,7 +279,11 @@ for h=1:1:(Nz-1)
                 elseif h==Nz-1
                   elem(m).face=1;
                  if j==Nr
-                     elem(m).face=[1,i+2];
+                     if j==1 && R_int>0
+                         elem(m).face=[1,i+2,i+2+Nt]; % Nr==1: giunzione tripla tappo/esterno/interno
+                     else
+                         elem(m).face=[1,i+2];
+                     end
                      elem(m).type='s';
                      b=bfun(i,j,h);
                      elem(m).node=mean(Nodes3D(Bricks(b,5:6),:),1);
@@ -229,6 +292,12 @@ for h=1:1:(Nz-1)
                      elem(m).vertf(6,:)=Nodes3D(Bricks(b,6),:);
                      elem(m).vertf(7,:)=Nodes3D(Bricks(b,2),:);
                      elem(m).vertf(8,:)=Nodes3D(Bricks(b,1),:);
+                     if j==1 && R_int>0
+                     elem(m).vertf(9,:)=Nodes3D(Bricks(b,8),:);
+                     elem(m).vertf(10,:)=Nodes3D(Bricks(b,7),:);
+                     elem(m).vertf(11,:)=Nodes3D(Bricks(b,3),:);
+                     elem(m).vertf(12,:)=Nodes3D(Bricks(b,4),:);
+                     end
                      elem(m).node_diff=mean(Nodes3D(Bricks(b,:)),1);
 
                      if i==1
@@ -258,6 +327,50 @@ for h=1:1:(Nz-1)
                      end
                      Con(m,k(i,j,h-1))=6;
                      end
+
+                 elseif j==1 && R_int>0
+                     elem(m).face=[1,i+2+Nt];
+                     elem(m).type='s';
+                     b=bfun(i,j,h);
+                     elem(m).node=mean(Nodes3D(Bricks(b,7:8),:),1);
+                     elem(m).vertf(1:4,:)=Nodes3D(Bricks(b,5:8),:);
+                     elem(m).vertf(5,:)=Nodes3D(Bricks(b,8),:);
+                     elem(m).vertf(6,:)=Nodes3D(Bricks(b,7),:);
+                     elem(m).vertf(7,:)=Nodes3D(Bricks(b,3),:);
+                     elem(m).vertf(8,:)=Nodes3D(Bricks(b,4),:);
+                     elem(m).node_diff=mean(Nodes3D(Bricks(b,:)),1);
+
+                     if i==1
+                         %case13b
+                     Con(m,k(i+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
+                     Con(m,k(Nt,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+                     Con(m,k(i,j,h-1))=6;
+
+                     elseif i==Nt
+                         %case14b
+                     Con(m,k(i-Nt+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
+                     Con(m,k(i-1,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+                     Con(m,k(i,j,h-1))=6;
+
+                     else
+                         %case15b
+                     Con(m,k(i+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
+                     Con(m,k(i-1,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+                     Con(m,k(i,j,h-1))=6;
+                     end
+
                  else
                      b=bfun(i,j,h);
                      elem(m).type='cq';
@@ -303,7 +416,11 @@ for h=1:1:(Nz-1)
                 else
                  elem(m).face=[];
                  if j==Nr
-                     elem(m).face=i+2;
+                     if j==1 && R_int>0
+                         elem(m).face=[i+2,i+2+Nt]; % Nr==1: entrambi i bordi coincidono
+                     else
+                         elem(m).face=i+2;
+                     end
                      elem(m).type='cq';
                      b=bfun(i,j,h);
                      elem(m).node=mean(Nodes3D(Bricks(b,[1,2,5,6]),:),1);
@@ -311,6 +428,12 @@ for h=1:1:(Nz-1)
                      elem(m).vertf(2,:)=Nodes3D(Bricks(b,2),:);
                      elem(m).vertf(3,:)=Nodes3D(Bricks(b,6),:);
                      elem(m).vertf(4,:)=Nodes3D(Bricks(b,5),:);
+                     if j==1 && R_int>0
+                     elem(m).vertf(5,:)=Nodes3D(Bricks(b,4),:);
+                     elem(m).vertf(6,:)=Nodes3D(Bricks(b,3),:);
+                     elem(m).vertf(7,:)=Nodes3D(Bricks(b,7),:);
+                     elem(m).vertf(8,:)=Nodes3D(Bricks(b,8),:);
+                     end
                      elem(m).node_diff=mean(Nodes3D(Bricks(b,:)),1);
 
                      if i==1
@@ -336,6 +459,51 @@ for h=1:1:(Nz-1)
                      else
                          %case24
                      Con(m,k(i+1,j,h))=1;
+                     Con(m,k(i,j,h+1))=3;
+                     Con(m,k(i-1,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+                     Con(m,k(i,j,h-1))=6;
+                     end
+
+                 elseif j==1 && R_int>0
+                     elem(m).face=i+2+Nt;
+                     elem(m).type='cq';
+                     b=bfun(i,j,h);
+                     elem(m).node=mean(Nodes3D(Bricks(b,[3,4,7,8]),:),1);
+                     elem(m).vertf(1,:)=Nodes3D(Bricks(b,4),:);
+                     elem(m).vertf(2,:)=Nodes3D(Bricks(b,3),:);
+                     elem(m).vertf(3,:)=Nodes3D(Bricks(b,7),:);
+                     elem(m).vertf(4,:)=Nodes3D(Bricks(b,8),:);
+                     elem(m).node_diff=mean(Nodes3D(Bricks(b,:)),1);
+
+                     if i==1
+                         %case25b
+                     Con(m,k(i+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
+                     Con(m,k(i,j,h+1))=3;
+                     Con(m,k(Nt,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+                     Con(m,k(i,j,h-1))=6;
+
+                     elseif i==Nt
+                         %case26b
+                     Con(m,k(i-Nt+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
+                     Con(m,k(i,j,h+1))=3;
+                     Con(m,k(i-1,j,h))=4;
+                     if j>1
+                     Con(m,k(i,j-1,h))=5;
+                     end
+                     Con(m,k(i,j,h-1))=6;
+
+                     else
+                         %case27b
+                     Con(m,k(i+1,j,h))=1;
+                     Con(m,k(i,j+1,h))=2;
                      Con(m,k(i,j,h+1))=3;
                      Con(m,k(i-1,j,h))=4;
                      if j>1
