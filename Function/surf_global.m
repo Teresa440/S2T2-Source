@@ -77,17 +77,33 @@ for i=1:1:length(surfaces)
         end
     else
         
-        for j=1:1:length(surfaces(i).elem)            
+        for j=1:1:length(surfaces(i).elem)
             if strcmp(surfaces(i).elem(j).type,'s')==1 && cont==0
                 surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf(1:2,:)];
 %                 surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf(2:3,:)];
-                 
-                
+
+
             elseif strcmp(surfaces(i).elem(j).type,'s')==1 && cont>=2
                 surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf(3:4,:)];
 % %                 surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf([1,4],:)];
+            elseif strcmp(surfaces(i).elem(j).type,'cq')==1 && strcmp(surfaces(i).item,'sphcap')==1
+                % Con la suddivisione fine per anello/blocco (calotta
+                % sferica), la maggior parte dei gruppi non contiene
+                % nessun elemento 's' (angolo) -- solo 'cq'. Senza questo
+                % ramo il poligono aggregato resterebbe vuoto. Non tocca
+                % 'cyl' (la parete ha sempre almeno un elemento 's' per
+                % gruppo, comportamento invariato).
+                surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf(1:2,:)];
+            elseif (strcmp(surfaces(i).elem(j).type,'cb')==1 || strcmp(surfaces(i).elem(j).type,'ct')==1) ...
+                    && strcmp(surfaces(i).item,'sphcap')==1
+                % Gruppo dell'apice: un solo elemento ('cb'/'ct'), il cui
+                % vertf e' gia' l'intero poligono di bordo (gli Nt punti
+                % attorno al polo, vedi node_sphcap_creator.m), non un
+                % lato condiviso con altri elementi -- va preso per
+                % intero, non solo 2 punti come per 'cq'/'s'.
+                surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf];
             end
-        end 
+        end
           cont=cont+1;
     end   
 end

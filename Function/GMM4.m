@@ -294,8 +294,16 @@ if do_caps
     Ntheta_cap = Nr; % TODO: rendere parametro utente se richiesto --
                      % risoluzione angolare interna della calotta, senza
                      % analogo diretto nel cilindro (vedi Sph_Cap_Mesh.m)
-    [elem_cb,Con_cb] = build_sphcap(R_int,R,Nr,Ntheta_cap,Nt,rot,Center,-L_wall/2,false);
-    [elem_ct,Con_ct] = build_sphcap(R_int,R,Nr,Ntheta_cap,Nt,rot,Center, L_wall/2,true);
+    phi_block_size = 1; % quanti settori phi raggruppare sotto la stessa
+                         % normale per il guscio esterno/interno (1=esatto
+                         % per cella, valore piu' alto=meno superfici/
+                         % costo MC ray-tracing ma normale approssimata sui
+                         % settori raggruppati). Misurato su un caso di
+                         % test: 1 e' sia piu' preciso (9 vs 30 gradi max)
+                         % sia piu' veloce (731s vs 1036s) di 4 -- nessun
+                         % motivo per usare un valore piu' alto qui.
+    [elem_cb,Con_cb] = build_sphcap(R_int,R,Nr,Ntheta_cap,Nt,rot,Center,-L_wall/2,false,phi_block_size);
+    [elem_ct,Con_ct] = build_sphcap(R_int,R,Nr,Ntheta_cap,Nt,rot,Center, L_wall/2,true,phi_block_size);
     [elem,Connect] = stitch_cyl_wall_and_sphcap(elem,Connect,elem_cb,Con_cb,elem_ct,Con_ct,Nt,Nr,Ntheta_cap,Nz);
 end
 
@@ -321,36 +329,23 @@ sat.node.globe=[sat.node.globe,elem];
 sat.geom.globe=[sat.geom.globe,face];
 
 if do_caps
-    % Placeholder di superficie per i due blocchi di ID riservati in
-    % build_sphcap.m (bottom: +Nt+2, top: +2*(Nt+2)). Normali
-    % approssimate: guscio esterno/interno lungo l'asse locale (una
-    % cupola non ha una normale unica, vedi nota in build_sphcap.m),
-    % celle laterali con la stessa formula per settore di
-    % cylinder_face.m. Proprieta' ottiche riprese da sat.prop.cyl(i).opt,
-    % stessa convenzione della parete (righe 1/2 basi, riga 3 laterale).
-    alfa_cap=360/Nt;
-    normlat0=[1 0 0]*[cosd(-alfa_cap/2) -sind(-alfa_cap/2) 0; sind(-alfa_cap/2) cosd(-alfa_cap/2) 0; 0 0 1];
+    % Superfici per i due blocchi di ID riservati in build_sphcap.m
+    % (bottom: +Nt+2, top: +Nt+2+block_cap). Normali generate da
+    % sphcap_face.m: esatte per anello theta/blocco phi sul guscio,
+    % esatte (costanti) sul bordo. Proprieta' ottiche riprese da
+    % sat.prop.cyl(i).opt, stessa convenzione della parete (righe 1/2
+    % basi, riga 3 laterale).
+    n_phi_blocks = ceil(Nt/phi_block_size);
+    n_shell_slots = 1 + (Ntheta_cap-1)*n_phi_blocks; % vedi node_sphcap_creator.m
+    block_cap = 2*n_shell_slots + Nt;
     for cap_side=1:2 % 1=bottom, 2=top
-        cap_face=struct('ID',cell(1,Nt+2),'norm',cell(1,Nt+2),'mesh',cell(1,Nt+2), ...
-                         'gridX',cell(1,Nt+2),'gridY',cell(1,Nt+2),'gridZ',cell(1,Nt+2), ...
-                         'prop_opt',cell(1,Nt+2));
-        outward_local = (2*(cap_side==2)-1)*[0 0 1]; % bottom:[0 0 -1], top:[0 0 1]
-        for jf=1:1:Nt+2
-            cap_face(jf).ID = jf + face_counter + cap_side*(Nt+2);
-            % .mesh non e' mai consultato per la calotta (a valle si usa
-            % sempre elem.vertf), ma GMM4.m stesso (righe piu' sotto,
-            % ismember(...,"rows") + mesh(1,:)) richiede una riga 1x3
-            % valida per ogni voce di sat.geom.globe, non vuota.
-            cap_face(jf).mesh = Center;
-            if jf==1
-                cap_face(jf).norm = outward_local*rot;      % guscio esterno
+        is_top = (cap_side==2);
+        [cap_face] = sphcap_face(Nt,Ntheta_cap,phi_block_size,rot,Center,is_top);
+        for jf=1:1:block_cap
+            cap_face(jf).ID = cap_face(jf).ID + face_counter + (Nt+2) + is_top*block_cap;
+            if jf<=n_shell_slots
                 cap_face(jf).prop_opt = sat.prop.cyl(i).opt(cap_side,:);
-            elseif jf==2
-                cap_face(jf).norm = -outward_local*rot;     % guscio interno
-                cap_face(jf).prop_opt = sat.prop.cyl(i).opt(3,:);
             else
-                ii=jf-2;
-                cap_face(jf).norm = normlat0*[cosd(-alfa_cap*(ii-1)) -sind(-alfa_cap*(ii-1)) 0; sind(-alfa_cap*(ii-1)) cosd(-alfa_cap*(ii-1)) 0; 0 0 1]*rot;
                 cap_face(jf).prop_opt = sat.prop.cyl(i).opt(3,:);
             end
         end
@@ -373,7 +368,7 @@ C=[C,zer1;zer2,Connect];
 node_counter=node_counter+total_nodes;
 
 if do_caps
-    face_counter=face_counter+3*(Nt+2); % parete + due blocchi calotta (vedi build_sphcap.m)
+    face_counter=face_counter+(Nt+2)+2*block_cap; % parete + due blocchi calotta (vedi build_sphcap.m)
 else
     face_counter=face_counter+2+Nt;
 end

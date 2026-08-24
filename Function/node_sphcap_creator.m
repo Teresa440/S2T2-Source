@@ -1,4 +1,22 @@
-function [elem,Con] = node_sphcap_creator(Nodes3D,Central,Bricks,R_int,R_out,h_cap,Ntheta,Nr_cap,Nt,total_nodes)
+function [elem,Con] = node_sphcap_creator(Nodes3D,Central,Bricks,R_int,R_out,h_cap,Ntheta,Nr_cap,Nt,total_nodes,phi_block_size)
+
+if nargin<11 || isempty(phi_block_size)
+    phi_block_size=1; % 1 = un gruppo di superficie per cella (esatto);
+                       % Nt = un gruppo per l'intero anello. Vedi
+                       % sphcap_face.m per come viene usato per generare
+                       % le normali del guscio.
+end
+n_phi_blocks = ceil(Nt/phi_block_size);
+phi_block = @(i) floor((i-1)/phi_block_size)+1;
+% ID locali: l'apice (j==1) e' un unico nodo fuso -- un solo slot, NON
+% n_phi_blocks (altrimenti gli altri restano vuoti, mai assegnati a
+% nessun elemento -- crash a valle in surf_global.m). Anelli regolari
+% (j=2..Ntheta) usano n_phi_blocks slot ciascuno, a partire da dopo lo
+% slot dell'apice.
+n_shell_slots = 1 + (Ntheta-1)*n_phi_blocks; % per guscio (interno o esterno)
+face_inner = @(j,ii) (j==1)*1 + (j>1)*(1+(j-2)*n_phi_blocks+phi_block(ii));
+face_outer = @(j,ii) n_shell_slots + (j==1)*1 + (j>1)*(1+(j-2)*n_phi_blocks+phi_block(ii));
+face_lateral = @(ii) 2*n_shell_slots + ii;
 
 nc=size(Central,1);
 nb=size(Bricks,1);
@@ -50,7 +68,7 @@ for h=1:1:Nr_cap
             i = 1;
             m=k(i,j,h);
             if h == 1
-                 elem(m).face=2;
+                 elem(m).face=face_inner(j,1);
                  elem(m).type='cb';
                  elem(m).node=mean(Nodes3D(Central(h,1:Nt),:),1);
                  elem(m).vertf=Nodes3D(Central(h,1:Nt),:);
@@ -66,7 +84,7 @@ for h=1:1:Nr_cap
                  elem(m).dz_local=Geom_r(j,h)*Nt;
 
             elseif h == Nr_cap
-                 elem(m).face=1;
+                 elem(m).face=face_outer(j,1);
                  elem(m).type='ct';
                  elem(m).node=mean(Nodes3D(Central(h,(Nt+1):end),:),1);
                  elem(m).vertf=Nodes3D(Central(h,(Nt+1):end),:);
@@ -99,10 +117,10 @@ for h=1:1:Nr_cap
                 m=k(i,j,h);
 
                 if h==1
-                 elem(m).face=2;
+                 elem(m).face=face_inner(j,i);
 
                  if j==Ntheta
-                     elem(m).face=[2,i+2];
+                     elem(m).face=[face_inner(j,i),face_lateral(i)];
                      elem(m).type='s';
                      b=bfun(i,j,h);
                      elem(m).node=mean(Nodes3D(Bricks(b,1:2),:),1);
@@ -191,9 +209,9 @@ for h=1:1:Nr_cap
                  elem(m).dz_local=Geom_r(j,h);
 
                 elseif h==Nr_cap
-                  elem(m).face=1;
+                  elem(m).face=face_outer(j,i);
                  if j==Ntheta
-                     elem(m).face=[1,i+2];
+                     elem(m).face=[face_outer(j,i),face_lateral(i)];
                      elem(m).type='s';
                      b=bfun(i,j,h);
                      elem(m).node=mean(Nodes3D(Bricks(b,5:6),:),1);
@@ -271,7 +289,7 @@ for h=1:1:Nr_cap
                 else
                  elem(m).face=[];
                  if j==Ntheta
-                     elem(m).face=i+2;
+                     elem(m).face=face_lateral(i);
                      elem(m).type='cq';
                      b=bfun(i,j,h);
                      elem(m).node=mean(Nodes3D(Bricks(b,[1,2,5,6]),:),1);

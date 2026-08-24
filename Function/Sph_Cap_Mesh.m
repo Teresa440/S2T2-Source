@@ -1,6 +1,6 @@
 function [Nodes, Triangles, Quads]=Sph_Cap_Mesh(theta_max,Ntheta,Nt)
 
-%Nodes (unit-sphere direction vectors)
+%Nodes 
 %------------
 c=0;
 for j=1:1:Ntheta %Number of theta rings
@@ -19,7 +19,7 @@ Nodes(c+1,1)=0;
 Nodes(c+1,2)=0;
 Nodes(c+1,3)=1;
 
-%Triangles (apex fan, ring 1 to apex)
+%Triangles 
 %------------
 
 Triangles=[];
@@ -33,7 +33,7 @@ Triangles(i+1,1)=i+1;
 Triangles(i+1,2)=1;
 Triangles(i+1,3)=c+1;
 
-%Quads (bands between consecutive theta rings)
+%Quads 
 %------------
 
 Quads=[];
