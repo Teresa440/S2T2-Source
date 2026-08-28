@@ -75,8 +75,82 @@ for i=1:1:length(surfaces)
                 surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).node];
             end
         end
+    elseif strcmp(surfaces(i).item,'cyl')==1
+        % Gruppo 'cyl': raccolgo il vertf INTERO (non solo 2 punti) di
+        % ogni elemento 's' (angolo), poi separo per raggio (distanza dal
+        % baricentro) in anello esterno/interno. Un tappo piatto anulare
+        % (R_int..R_out) e' un buco vero, non rappresentabile con un solo
+        % contorno -- prima si prendevano solo 2 punti per elemento (il
+        % "lato piu' esterno" della cella d'angolo), che per l'angolo
+        % INTERNO (aggiunto quando e' stato esposto il foro della parete)
+        % da' per errore il confine tra il 1' e 2' anello radiale (es.
+        % r=70) invece del vero R_int (r=60): il poligono aggregato
+        % risultava un contorno auto-intersecante che non escludeva il
+        % foro (bug preesistente, gia' presente col solo angolo esterno,
+        % un dodecagono a R_out che non ha mai escluso il centro) E
+        % arrivava a escludere per errore parte della corona vera.
+        % Verificato: fino all'83% dei raggi dalla calotta verso questo
+        % gruppo si "impegnavano" su di esso (poligono aggregato troppo
+        % permissivo verso il foro) per poi fallire il test per-elemento
+        % e andare persi, invece di essere lasciati liberi per il vero
+        % bersaglio.
+        cand_full=[]; cand_simple=[]; n_s=0;
+        for j=1:1:length(surfaces(i).elem)
+            if strcmp(surfaces(i).elem(j).type,'s')==1
+                cand_full=[cand_full;surfaces(i).elem(j).vertf]; %#ok
+                cand_simple=[cand_simple;surfaces(i).elem(j).vertf(1:2,:)]; %#ok
+                n_s=n_s+1;
+            end
+        end
+        if isempty(cand_full)
+            surfaces(i).vert=[];
+        else
+            % Un tappo piatto anulare aggrega SEMPRE gli elementi
+            % d'angolo di TUTTI i settori (uno per i=1..Nt, quindi n_s
+            % grande) -- una fascia LATERALE (un solo settore) ne ha al
+            % piu' 2 (i due angoli sopra/sotto), 3 nel caso limite Nr==1.
+            % Questo distingue in modo affidabile i due casi senza dover
+            % conoscere Nt esplicitamente (surf_global.m non lo riceve).
+            % Nota: provato prima un criterio puramente geometrico
+            % (variazione di raggio perpendicolare alla normale) ma non
+            % distingue i due casi -- per una fascia laterale il raggio e'
+            % ANCHE li' costante "lungo la normale", stesso pattern
+            % apparente di un tappo piatto; la vera differenza e'
+            % strutturale (quanti settori contribuiscono), non geometrica.
+            if n_s <= 4
+                surfaces(i).vert = cand_simple;
+            else
+                axis_pt = mean(cand_full,1);
+                delta = cand_full-axis_pt;
+                along_normal = delta*surfaces(i).norm';
+                perp = delta - along_normal*surfaces(i).norm;
+                radii = vecnorm(perp,2,2);
+                r_min = min(radii); r_max = max(radii);
+            if (r_max-r_min) < 0.05*max(r_max,1)
+                % variazione di raggio trascurabile: comportamento
+                % originale invariato, un solo contorno.
+                surfaces(i).vert = cand_simple;
+            else
+                % tappo anulare: due contorni separati, ciascuno solo i
+                % punti del proprio bordo VERO (non i bordi interni delle
+                % singole celle d'angolo), ordinati per angolo.
+                tol = (r_max-r_min)*0.15;
+                outer_pts = cand_full(radii >= r_max-tol,:);
+                inner_pts = cand_full(radii <= r_min+tol,:);
+                if size(outer_pts,1)>=3 && size(inner_pts,1)>=3
+                    [~,outer_sorted] = center_sort_polygon(outer_pts);
+                    [~,inner_sorted] = center_sort_polygon(inner_pts);
+                    % NaN separa i due contorni: inpolygon() di MATLAB
+                    % supporta nativamente questo formato per un poligono
+                    % con un buco (dentro l'esterno, fuori dall'interno).
+                    surfaces(i).vert = [outer_sorted; NaN(1,3); inner_sorted];
+                else
+                    surfaces(i).vert = cand_simple; % fallback prudente
+                end
+            end
+            end
+        end
     else
-        
         for j=1:1:length(surfaces(i).elem)
             if strcmp(surfaces(i).elem(j).type,'s')==1 && cont==0
                 surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf(1:2,:)];
@@ -93,7 +167,22 @@ for i=1:1:length(surfaces)
                 % ramo il poligono aggregato resterebbe vuoto. Non tocca
                 % 'cyl' (la parete ha sempre almeno un elemento 's' per
                 % gruppo, comportamento invariato).
-                surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf(1:2,:)];
+                %
+                % Presi TUTTI e 4 i vertici, non solo 2: con
+                % phi_block_size=1 (il valore attualmente usato in
+                % GMM4.m/build_sphcap.m) ogni gruppo 'cq' ha esattamente UN
+                % elemento, quindi il poligono del gruppo deve coincidere
+                % col vero quadrilatero dell'elemento -- prenderne solo 2
+                % vertici lo rendeva degenere (retta, area=0), facendo
+                % fallire quasi sempre il pre-filtro inpolygon in
+                % MC_ray_tracing3.m (fattore di vista della calotta
+                % crollato fino al 50%, verificato). Se in futuro
+                % phi_block_size>1 (piu' elementi 'cq' per gruppo), questo
+                % prende 4 vertici per OGNI elemento invece di 2 --
+                % ridondante ma non testato: ricontrollare che
+                % l'ordinamento angolare (center_sort_polygon, sotto)
+                % produca comunque il perimetro giusto in quel caso.
+                surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).vertf];
             elseif (strcmp(surfaces(i).elem(j).type,'cb')==1 || strcmp(surfaces(i).elem(j).type,'ct')==1) ...
                     && strcmp(surfaces(i).item,'sphcap')==1
                 % Gruppo dell'apice: un solo elemento ('cb'/'ct'), il cui
@@ -105,13 +194,32 @@ for i=1:1:length(surfaces)
             end
         end
           cont=cont+1;
-    end   
+    end
 end
 
 
 
 for i=1:1:length(surfaces)
      xyz=surfaces(i).vert;
+     nan_row = find(isnan(xyz(:,1)),1);
+     if ~isempty(nan_row)
+         % Tappo anulare (guscio esterno/interno separati da NaN, vedi
+         % sopra): centro/ordinamento dal solo contorno ESTERNO (quello
+         % che definisce l'estensione reale della superficie); area =
+         % esterno meno il foro. Il formato NaN-separato di .vert viene
+         % preservato -- serve cosi' a MC_ray_tracing3.m per il test
+         % inpolygon con buco.
+         outer_part = xyz(1:nan_row-1,:);
+         inner_part = xyz(nan_row+1:end,:);
+         [xyzc,outer_sorted] = center_sort_polygon(outer_part);
+         [~,inner_sorted] = center_sort_polygon(inner_part);
+         surfaces(i).center = xyzc;
+         surfaces(i).vert = [outer_sorted; NaN(1,3); inner_sorted];
+         area_outer = area_polygon2(xyzc,outer_sorted(:,1),outer_sorted(:,2),outer_sorted(:,3));
+         inner_c = mean(inner_sorted,1);
+         area_inner = area_polygon2(inner_c,inner_sorted(:,1),inner_sorted(:,2),inner_sorted(:,3));
+         surfaces(i).area = area_outer - area_inner;
+     else
 %      normal=surfaces(i).norm;
 %      xyzc=mean(points,1);
     [xyzc,xyz] = center_sort_polygon(xyz);
@@ -119,11 +227,12 @@ for i=1:1:length(surfaces)
    surfaces(i).vert=xyz;
    surfaces(i).vert= unique(surfaces(i).vert,'stable','rows');
 %      [points] = sort_vert(points,normal);
-    
+
 %      surfaces(i).vert=points;
    surfaces(i).area=area_polygon2(xyzc,surfaces(i).vert(:,1),...
        surfaces(i).vert(:,2),surfaces(i).vert(:,3));
 %    surfaces(i).normal=normal_from_points(surfaces(i).vert);
+     end
 end
 
 
@@ -188,6 +297,29 @@ for i=1:1:length(surf_for_MCRT_int)
         surf_for_MCRT_int(i).norm=-surf_for_MCRT_int(i).norm;
     end
 end
+
+% Classificazione geometrica "affaccia sulla cavita' (concava) del proprio
+% oggetto" vs "affaccia verso l'esterno (convesso)": confronta la normale
+% di ogni superficie con la direzione dal baricentro del proprio oggetto
+% (stesso item+number) al centro della superficie stessa. Se puntano in
+% direzioni opposte (prodotto scalare negativo) la superficie e' concava
+% rispetto al proprio oggetto (es. foro interno del cilindro, guscio
+% interno della calotta, bordo) -- se concordi, e' convessa (parete
+% esterna, guscio esterno, tappi). Serve per evitare di abilitare lo
+% scambio radiativo tra una faccia interna e una esterna dello STESSO
+% oggetto (fisicamente impossibile, c'e' materiale solido in mezzo) --
+% vedi nota sotto sull'esclusione stesso-item-stesso-number.
+all_items = {surf_for_MCRT_int.item};
+all_numbers = [surf_for_MCRT_int.number];
+is_cavity_facing = false(1,length(surf_for_MCRT_int));
+for i=1:1:length(surf_for_MCRT_int)
+    same_obj = strcmp(all_items,surf_for_MCRT_int(i).item) & (all_numbers==surf_for_MCRT_int(i).number);
+    centers_same_obj = reshape([surf_for_MCRT_int(same_obj).center],3,[])';
+    obj_centroid = mean(centers_same_obj,1);
+    radial = surf_for_MCRT_int(i).center - obj_centroid;
+    is_cavity_facing(i) = dot(surf_for_MCRT_int(i).norm,radial) < 0;
+end
+
 for i=1:1:length(surf_for_MCRT_int)
     item1=surf_for_MCRT_int(i).item;
     num1=surf_for_MCRT_int(i).number;
@@ -204,7 +336,29 @@ for i=1:1:length(surf_for_MCRT_int)
             num2=surf_for_MCRT_int(j).number;
             f_id2=surf_for_MCRT_int(j).ID;
             if f_id2 ~= f_id1
-                if strcmp(item1,item2)==1
+                % Esclusione stesso-item-stesso-number: corretta per un
+                % oggetto convesso (pannello, board, parallelepipedo -- non
+                % vede mai se stesso, per costruzione geometrica). Per
+                % 'cyl'/'sphcap' l'oggetto puo' avere sia facce concave
+                % (foro interno, guscio interno, bordo) sia convesse
+                % (parete esterna, guscio esterno, tappi): le prime SI
+                % vedono tra loro anche se stesso oggetto/numero, le
+                % seconde no (e una concava non vede MAI una convessa dello
+                % stesso oggetto -- ci sarebbe materiale solido in mezzo).
+                % Vedi is_cavity_facing sopra.
+                %
+                % Trovato e corretto (era la causa del problema segnalato
+                % qui prima): la prima versione di questo fix escludeva in
+                % base al solo item, sbloccando per errore ANCHE le coppie
+                % concava-convessa dello stesso oggetto (es. foro interno
+                % vs parete esterna) -- MC_ray_tracing3.m non fa un vero
+                % test di occlusione, quindi quei raggi "rubavano" hit al
+                % vero bersaglio attraverso il materiale solido, facendo
+                % crollare la somma dei fattori di vista della cavita'
+                % (osservato: 2-18% invece di ~100%).
+                same_item_no_self_view = strcmp(item1,item2)==1 && ...
+                    ~(is_cavity_facing(i) && is_cavity_facing(j));
+                if same_item_no_self_view
                     if num1 ~= num2
                       surf_for_MCRT_int(i).match=[surf_for_MCRT_int(i).match,surf_for_MCRT_int(j).ID];
                     end
