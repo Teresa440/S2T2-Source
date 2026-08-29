@@ -58,12 +58,23 @@ for i=1:1:length(surfaces)
 end
 
 
-for i=1:1:length(surfaces)    
+for i=1:1:length(surfaces)
+    surfaces(i).norm=sat.geom.globe(i).norm;
+    surfaces(i).prop_opt=sat.geom.globe(i).prop_opt;
+    if isempty(surfaces(i).elem)
+        % Slot orfano: nessun elemento vi e' piu' agganciato (es. le due
+        % basi piatte della parete, ID locale 1/2, quando la calotta
+        % sferica ne prende il posto -- vedi nota in
+        % stitch_cyl_wall_and_sphcap.m). item resta vuoto: rimosso subito
+        % dopo da surf_for_MCRT prima di qualunque uso in
+        % MC_ray_tracing3.m; sat.geom.surfaces mantiene comunque lo slot
+        % (stessa lunghezza di sat.geom.globe, richiesto da
+        % plot_GMM4_heatmap.m).
+        continue
+    end
     surfaces(i).item=surfaces(i).elem(1).item;
     surfaces(i).number=surfaces(i).elem(1).number;
     surfaces(i).ex_in=surfaces(i).elem(1).ex_in;
-    surfaces(i).norm=sat.geom.globe(i).norm;
-    surfaces(i).prop_opt=sat.geom.globe(i).prop_opt;
 end
 
 
@@ -200,6 +211,12 @@ end
 
 
 for i=1:1:length(surfaces)
+     if isempty(surfaces(i).elem)
+         % vedi nota sullo slot orfano sopra: nessun vertice da ordinare.
+         surfaces(i).center=[0 0 0];
+         surfaces(i).area=0;
+         continue
+     end
      xyz=surfaces(i).vert;
      nan_row = find(isnan(xyz(:,1)),1);
      if ~isempty(nan_row)
@@ -254,6 +271,17 @@ end
 
 sat.geom.surfaces=surfaces;
 surf_for_MCRT=surfaces;
+
+% Tolgo gli slot orfani (vedi nota sopra) dalla copia usata per il ray
+% tracing -- sat.geom.surfaces sopra li mantiene invece (stessa lunghezza
+% di sat.geom.globe, serve a plot_GMM4_heatmap.m). Rinumero .ID di
+% conseguenza, stesso schema gia' usato piu' sotto per l'esclusione dei
+% pannelli solari.
+ind_orfani = cellfun(@isempty,{surf_for_MCRT.elem});
+surf_for_MCRT(ind_orfani)=[];
+for i=1:1:length(surf_for_MCRT)
+    surf_for_MCRT(i).ID=i;
+end
 
 %%
 for s1=1:1:length(surf_for_MCRT)
@@ -320,6 +348,25 @@ for i=1:1:length(surf_for_MCRT_int)
     is_cavity_facing(i) = dot(surf_for_MCRT_int(i).norm,radial) < 0;
 end
 
+% Una superficie che affaccia sulla cavita' interna di un cilindro CHIUSO
+% (sat.geom.cyl(num).closed==1 -- foro della parete e, quando presenti,
+% guscio/bordo delle calotte sferiche) e' fisicamente sigillata: non puo'
+% avere nessuna linea di vista verso la scatola esterna ('ex'), a
+% differenza di un cilindro APERTO dove lo stesso foro interno vede
+% davvero l'esterno alle estremita' aperte (comportamento da conservare
+% li'). MC_ray_tracing3.m non fa un vero test di occlusione 3D, quindi
+% senza questo controllo 'ex' viene sempre incluso nel match anche per
+% cavita' sigillate -- misurato: fino al 50% (media 13%) del fattore di
+% vista di queste superfici finiva su 'ex' per errore.
+is_sealed_cavity = false(1,length(surf_for_MCRT_int));
+for i=1:1:length(surf_for_MCRT_int)
+    item_i = surf_for_MCRT_int(i).item;
+    if is_cavity_facing(i) && (strcmp(item_i,'cyl')==1 || strcmp(item_i,'sphcap')==1)
+        num_i = surf_for_MCRT_int(i).number;
+        is_sealed_cavity(i) = isfield(sat.geom.cyl(num_i),'closed') && isequal(sat.geom.cyl(num_i).closed,1);
+    end
+end
+
 for i=1:1:length(surf_for_MCRT_int)
     item1=surf_for_MCRT_int(i).item;
     num1=surf_for_MCRT_int(i).number;
@@ -327,7 +374,13 @@ for i=1:1:length(surf_for_MCRT_int)
    if strcmp(item1,'ex')==1
         for j=1:1:length(surf_for_MCRT_int)
             if surf_for_MCRT_int(j).ID ~= surf_for_MCRT_int(i).ID
-            surf_for_MCRT_int(i).match=[surf_for_MCRT_int(i).match,surf_for_MCRT_int(j).ID];
+                if is_sealed_cavity(j)
+                    % vedi nota su is_sealed_cavity sopra: la scatola
+                    % esterna non ha linea di vista verso una cavita'
+                    % interna sigillata.
+                else
+                    surf_for_MCRT_int(i).match=[surf_for_MCRT_int(i).match,surf_for_MCRT_int(j).ID];
+                end
             end
         end
    else
@@ -335,7 +388,7 @@ for i=1:1:length(surf_for_MCRT_int)
             item2=surf_for_MCRT_int(j).item;
             num2=surf_for_MCRT_int(j).number;
             f_id2=surf_for_MCRT_int(j).ID;
-            if f_id2 ~= f_id1
+            if f_id2 ~= f_id1 && ~(strcmp(item2,'ex')==1 && is_sealed_cavity(i))
                 % Esclusione stesso-item-stesso-number: corretta per un
                 % oggetto convesso (pannello, board, parallelepipedo -- non
                 % vede mai se stesso, per costruzione geometrica). Per

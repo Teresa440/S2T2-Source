@@ -31,6 +31,19 @@ for j=1:1:Nr
         a_contact = elem_all(m_wall).Af(6);
         elem_all(m_wall).Ac(6) = a_contact;
         elem_all(m_wall).Af(6) = 0;
+        % La faccia piatta di base della parete (ID locale 1, generata
+        % sempre da cylinder_face.m indipendentemente da do_caps) coincide
+        % geometricamente col bordo della calotta appena agganciata qui
+        % (stesso piano z, stesso range di raggio R_int..R_out -- verificato:
+        % l'area della faccia 1 sommata su tutti i settori torna esattamente
+        % uguale alla somma delle aree dei bordi calotta). E' un doppione,
+        % non una superficie radiativa reale distinta: il bordo calotta la
+        % rappresenta gia' correttamente (classificato cavita' interna in
+        % surf_global.m). Va tolta dal lato radiativo (.face) qui, non solo
+        % da Af/Ac, altrimenti surf_global.m continua a trattarla come
+        % superficie convessa esposta a 'ex' (misurato: fino al 50% di fuga
+        % su questi elementi).
+        elem_all(m_wall).face(elem_all(m_wall).face==2) = [];
 
         a_contact2 = elem_all(m_cap).Af(2);
         elem_all(m_cap).Ac(2) = a_contact2;
@@ -46,6 +59,9 @@ for j=1:1:Nr
         a_contact3 = elem_all(m_wall2).Af(3);
         elem_all(m_wall2).Ac(3) = a_contact3;
         elem_all(m_wall2).Af(3) = 0;
+        % vedi nota sopra sulla faccia 1 -- stesso doppione, faccia locale 2
+        % (base superiore).
+        elem_all(m_wall2).face(elem_all(m_wall2).face==1) = [];
 
         a_contact4 = elem_all(m_cap2).Af(2);
         elem_all(m_cap2).Ac(2) = a_contact4;
