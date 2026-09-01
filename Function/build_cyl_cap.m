@@ -29,13 +29,25 @@ if is_top
     for idx=1:1:n_layer
         elem_layer(idx).Ac([3 6]) = elem_layer(idx).Ac([6 3]);
         elem_layer(idx).Af([3 6]) = elem_layer(idx).Af([6 3]);
-        elem_layer(idx).face = 1;
     end
     for idx=1:1:n_core
         elem_core(idx).Ac([3 6]) = elem_core(idx).Ac([6 3]);
         elem_core(idx).Af([3 6]) = elem_core(idx).Af([6 3]);
-        elem_core(idx).face = 1;
     end
+end
+
+% Un solo ID di faccia locale per l'intero disco esterno (layer anulare +
+% core), stessa convenzione della base piatta della parete in
+% cylinder_face.m (un'unica faccia condivisa da tutti i settori, non una
+% per settore) -- prima solo il ramo is_top la impostava, quello bottom
+% restava con gli ID locali grezzi di node_cyl_creator3 (sbagliato:
+% avrebbe prodotto tante facce separate invece di un disco unico). Solo il
+% layer: il core riceve piu' sotto un secondo ID dedicato (lato cavita').
+for idx=1:1:n_layer
+    elem_layer(idx).face = 1;
+end
+for idx=1:1:n_core
+    elem_core(idx).face = 1;
 end
 
 
@@ -82,6 +94,59 @@ for ii=1:1:Nt
 
     Con_cap(m_layer,m_core) = 5; % layer looking inward, toward the core
     Con_cap(m_core,m_layer) = 2; % core looking outward, toward the layer
+end
+
+% Il core (0..R_int) tocca la CAVITA' interna del cilindro sul lato
+% z_ref, non la parete (a differenza del layer, che li' tocca davvero la
+% parete e resta correttamente non-radiativo) -- ma node_cyl_creator3.m,
+% costruendo il tappo come un solo strato assiale (Nz=2), applica comunque
+% la convenzione generica "un lato e' un confine vero (Af), l'altro si
+% presume continui altrove (Ac)" -- valida per gli strati INTERNI di una
+% pila vera (come la parete, Nz=9), ma qui non c'e' nessun "altrove" dal
+% lato z_ref del core: e' aria (la cavita'), un confine vero quanto quello
+% esterno. L'area e' gia' quella giusta (finita in Ac invece che Af per la
+% stessa convenzione) -- va solo rispostata indietro, con un ID di faccia
+% proprio (locale 2), distinto dal disco esterno (locale 1, condiviso con
+% tutto il layer). Verificato: senza questo, il tappo emetteva verso la
+% cavita' solo 0.01% (quasi nullo) mentre la cavita' emetteva verso il
+% tappo il 15% -- scambio non reciproco, energeticamente sbagliato.
+z_ref_idx = 3 + 3*is_top; % bottom (nessuno scambio sopra) -> 3; top (scambiato sopra) -> 6
+offset_local = [0 0 Thickness];
+offset_global = offset_local*rot;
+for idx=1:1:n_core
+    m = n_layer+idx; % elem_cap, non elem_core -- e' gia' la copia concatenata
+                      % restituita dalla funzione (modificare elem_core qui
+                      % non avrebbe avuto nessun effetto sul risultato finale)
+    a_cav = elem_cap(m).Ac(z_ref_idx);
+    elem_cap(m).Af(z_ref_idx) = a_cav;
+    elem_cap(m).Ac(z_ref_idx) = 0;
+    % Il lato interno non ha una propria geometria salvata da
+    % node_cyl_creator3.m (elemento a strato singolo) -- lo ricavo
+    % specchiando il lato esterno lungo z di uno spessore Thickness
+    % (stesso profilo radiale/angolare, unica differenza reale).
+    vertf_outer = elem_cap(m).vertf;
+    if is_top
+        vertf_inner = vertf_outer - offset_global;
+    else
+        vertf_inner = vertf_outer + offset_global;
+    end
+    elem_cap(m).vertf = [vertf_outer; vertf_inner];
+    elem_cap(m).face = [1, 2]; % 1=disco esterno (condiviso col layer), 2=lato cavita' (solo core)
+end
+
+% Gli ID elem.face locali sono generati identici per il tappo inferiore e
+% quello superiore -- qui si spostano in un blocco disgiunto per non
+% collidere ne' tra loro ne' con la parete, stessa logica di
+% build_sphcap.m. block=2 (disco esterno + lato cavita' del core). do_caps
+% richiede R_int>0, quindi wall_nfaces e' sempre 2*Nt+2 (vedi
+% cylinder_face.m).
+wall_nfaces = 2*Nt+2;
+block = 2;
+face_shift = wall_nfaces + is_top*block; % bottom -> +wall_nfaces, top -> +wall_nfaces+block
+for idx=1:1:numel(elem_cap)
+    if ~isempty(elem_cap(idx).face)
+        elem_cap(idx).face = elem_cap(idx).face + face_shift;
+    end
 end
 
 end

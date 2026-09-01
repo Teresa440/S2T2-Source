@@ -67,9 +67,28 @@ for i=1:1:nn
                 % vero, media di tutti gli 8 vertici) e' gia' calcolato
                 % da entrambi i node creator per ogni elemento e non
                 % soffre di questo problema.
+                % Stesso problema anche per il giunto interno layer-core
+                % del tappo piatto (capf-capf, build_cyl_cap.m): il layer
+                % anulare e il core hanno 'node' coincidente al confine
+                % R_int per lo stesso motivo (elemento 's' con 'node'
+                % posizionato sul bordo condiviso, non al vero baricentro).
+                % Verificato: senza questo caso G_c esplodeva a +-Inf su 64
+                % coppie layer-core, propagando NaN in tutto il transitorio
+                % (RCOND=NaN, warning 'Matrix is singular' a ogni step).
+                % NON estendere a cyl-capf (parete-tappo): li' .node non
+                % coincide mai (verificato, zero Inf).
                 is_stitch = (strcmp(sat.node.globe(i).item,'cyl') && strcmp(sat.node.globe(j).item,'sphcap')) ...
                          || (strcmp(sat.node.globe(i).item,'sphcap') && strcmp(sat.node.globe(j).item,'cyl'));
-                if is_stitch
+                is_capf_stitch = strcmp(sat.node.globe(i).item,'capf') && strcmp(sat.node.globe(j).item,'capf');
+                if is_capf_stitch
+                    % .node_diff ha lunghezza diversa tra layer ('s', 8
+                    % vertici) e core ('cq', 4 vertici) -- non sottraibile
+                    % direttamente come per cyl-sphcap. Uso invece il vero
+                    % baricentro (media di .vertf, sempre un punto 1x3
+                    % qualunque sia il numero di vertici) per lo stesso
+                    % scopo: evitare 'node' che coincide al confine R_int.
+                    vect=mean(sat.node.globe(i).vertf,1)-mean(sat.node.globe(j).vertf,1);
+                elseif is_stitch
                     vect=sat.node.globe(i).node_diff-sat.node.globe(j).node_diff;
                 else
                     vect=sat.node.globe(i).node-sat.node.globe(j).node;

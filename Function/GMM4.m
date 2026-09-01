@@ -241,15 +241,34 @@ else
     Closed=false;
 end
 
+if isfield(sat.geom.cyl(i),'cap_type') && ~isempty(sat.geom.cyl(i).cap_type)
+    cap_type = sat.geom.cyl(i).cap_type;
+else
+    cap_type = 'sphere'; % default: comportamento invariato per i modelli esistenti
+end
+is_flat_cap = strcmp(cap_type,'flat');
+
 do_caps = R_int>0 && Closed;
 
 if do_caps
-    h_cap = R; % TODO: rendere parametro utente se richiesto -- vedi
-               % build_sphcap.m per la motivazione della scelta
-               % emisferica (spessore calotta = spessore parete, esatto
-               % solo per h_cap=R)
-    if L<=2*h_cap
-        error('Cylinder %d: L (%.4g) must be greater than 2*R (%.4g) for spherical end caps.',i,L,2*R);
+    if is_flat_cap
+        if isfield(sat.geom.cyl(i),'cap_thickness') && ~isempty(sat.geom.cyl(i).cap_thickness)
+            cap_thickness = sat.geom.cyl(i).cap_thickness;
+        else
+            cap_thickness = R-R_int; % default: stesso spessore della parete
+        end
+        h_cap = cap_thickness;
+        if L<=2*h_cap
+            error('Cylinder %d: L (%.4g) must be greater than 2*cap_thickness (%.4g) for flat end caps.',i,L,2*h_cap);
+        end
+    else
+        h_cap = R; % TODO: rendere parametro utente se richiesto -- vedi
+                   % build_sphcap.m per la motivazione della scelta
+                   % emisferica (spessore calotta = spessore parete, esatto
+                   % solo per h_cap=R)
+        if L<=2*h_cap
+            error('Cylinder %d: L (%.4g) must be greater than 2*R (%.4g) for spherical end caps.',i,L,2*R);
+        end
     end
     L_wall = L-2*h_cap;
 else
@@ -305,9 +324,33 @@ if do_caps
                          % test: 1 e' sia piu' preciso (9 vs 30 gradi max)
                          % sia piu' veloce (731s vs 1036s) di 4 -- nessun
                          % motivo per usare un valore piu' alto qui.
-    [elem_cb,Con_cb] = build_sphcap(R_int,R,Nr,Ntheta_cap,Nt,rot,Center,-L_wall/2,false,phi_block_size);
-    [elem_ct,Con_ct] = build_sphcap(R_int,R,Nr,Ntheta_cap,Nt,rot,Center, L_wall/2,true,phi_block_size);
-    [elem,Connect] = stitch_cyl_wall_and_sphcap(elem,Connect,elem_cb,Con_cb,elem_ct,Con_ct,Nt,Nr,Ntheta_cap,Nz);
+    if is_flat_cap
+        Nr_cap_flat = min(2,Nr); % risoluzione radiale del layer anulare del
+                          % tappo, FISSA (non un parametro utente) e
+                          % indipendente da Nr della parete -- riusare Nr
+                          % qui non aveva alcun motivo fisico (lo spessore
+                          % del tappo, R-R_int, non ha bisogno della stessa
+                          % risoluzione radiale della parete) e produceva
+                          % anelli inutilmente sottili che appesantivano la
+                          % convergenza del solver termico (rapporto
+                          % conduttanza/capacita' termica circa doppio
+                          % rispetto alla calotta sferica a parita' di
+                          % mesh, misurato). Nr_cap=1 sarebbe bastato in
+                          % teoria ma fa crashare node_cyl_creator3.m per
+                          % il "core" (bug preesistente e piu' ampio, stesso
+                          % genere del caso Nr=1 gia' noto per la calotta
+                          % sferica -- non toccato qui, fuori scope);
+                          % Nr_cap=2 evita quell'edge case restando comunque
+                          % una riduzione netta (da 5 a 2 anelli nel test di
+                          % riferimento).
+        [elem_cb,Con_cb] = build_cyl_cap(R_int,R,Nr_cap_flat,Nt,cap_thickness,rot,Center,-L_wall/2,false);
+        [elem_ct,Con_ct] = build_cyl_cap(R_int,R,Nr_cap_flat,Nt,cap_thickness,rot,Center, L_wall/2,true);
+        [elem,Connect] = stitch_cyl_wall_and_caps(elem,Connect,elem_cb,Con_cb,elem_ct,Con_ct,Nt,Nr,Nz,Nr_cap_flat);
+    else
+        [elem_cb,Con_cb] = build_sphcap(R_int,R,Nr,Ntheta_cap,Nt,rot,Center,-L_wall/2,false,phi_block_size);
+        [elem_ct,Con_ct] = build_sphcap(R_int,R,Nr,Ntheta_cap,Nt,rot,Center, L_wall/2,true,phi_block_size);
+        [elem,Connect] = stitch_cyl_wall_and_sphcap(elem,Connect,elem_cb,Con_cb,elem_ct,Con_ct,Nt,Nr,Ntheta_cap,Nz);
+    end
 end
 
 total_nodes = numel(elem); % may include the 2 end-cap meshes
@@ -315,9 +358,17 @@ for j=1:1:total_nodes
     elem(j).ID=j+node_counter;
     elem(j).ex_in='i';
     if do_caps && j>n_wall
-        elem(j).item='sphcap'; % nodi della calotta: item diverso dalla
-                                % parete, altrimenti is_radial_sph &&
-                                % same_sphcap in TMM2.m non scatta mai
+        if is_flat_cap
+            elem(j).item='capf'; % nodi del tappo piatto: item diverso dalla
+                                  % parete, stesso motivo di 'sphcap' (evita
+                                  % collisioni in TMM2.m/surf_global.m tra
+                                  % giunzione parete-tappo e conduzione
+                                  % interna alla parete stessa)
+        else
+            elem(j).item='sphcap'; % nodi della calotta: item diverso dalla
+                                    % parete, altrimenti is_radial_sph &&
+                                    % same_sphcap in TMM2.m non scatta mai
+        end
     else
         elem(j).item='cyl';
     end
@@ -332,27 +383,47 @@ sat.node.globe=[sat.node.globe,elem];
 sat.geom.globe=[sat.geom.globe,face];
 
 if do_caps
-    % Superfici per i due blocchi di ID riservati in build_sphcap.m
-    % (bottom: +wall_nfaces, top: +wall_nfaces+block_cap). Normali
-    % generate da sphcap_face.m: esatte per anello theta/blocco phi sul
-    % guscio, esatte (costanti) sul bordo. Proprieta' ottiche riprese da
-    % sat.prop.cyl(i).opt, stessa convenzione della parete (righe 1/2
-    % basi, riga 3 laterale).
-    n_phi_blocks = ceil(Nt/phi_block_size);
-    n_shell_slots = 1 + (Ntheta_cap-1)*n_phi_blocks; % vedi node_sphcap_creator.m
-    block_cap = 2*n_shell_slots + Nt;
-    for cap_side=1:2 % 1=bottom, 2=top
-        is_top = (cap_side==2);
-        [cap_face] = sphcap_face(Nt,Ntheta_cap,phi_block_size,rot,Center,is_top);
-        for jf=1:1:block_cap
-            cap_face(jf).ID = cap_face(jf).ID + face_counter + wall_nfaces + is_top*block_cap;
-            if jf<=n_shell_slots
+    % Superfici per i due blocchi di ID riservati in build_sphcap.m/
+    % build_cyl_cap.m (bottom: +wall_nfaces, top: +wall_nfaces+block_cap).
+    % Proprieta' ottiche riprese da sat.prop.cyl(i).opt, stessa convenzione
+    % della parete (righe 1/2 basi, riga 3 laterale).
+    if is_flat_cap
+        % Tappo piatto: due facce per lato (block_cap=2, vedi
+        % build_cyl_cap.m/flat_cap_face.m) -- disco esterno (verso 'ex')
+        % e lato interno del core (verso la cavita' del cilindro),
+        % normali costanti, nessuna suddivisione per anello/settore come
+        % nella calotta sferica. Stessa proprieta' ottica per entrambe
+        % (riga cap_side), coerente con la convenzione della calotta
+        % sferica (guscio interno ed esterno condividono la riga base).
+        block_cap = 2;
+        for cap_side=1:2 % 1=bottom, 2=top
+            is_top = (cap_side==2);
+            [cap_face] = flat_cap_face(rot,Center,is_top);
+            for jf=1:1:block_cap
+                cap_face(jf).ID = cap_face(jf).ID + face_counter + wall_nfaces + is_top*block_cap;
                 cap_face(jf).prop_opt = sat.prop.cyl(i).opt(cap_side,:);
-            else
-                cap_face(jf).prop_opt = sat.prop.cyl(i).opt(3,:);
             end
+            sat.geom.globe=[sat.geom.globe,cap_face];
         end
-        sat.geom.globe=[sat.geom.globe,cap_face];
+    else
+        % Calotta sferica: normali generate da sphcap_face.m, esatte per
+        % anello theta/blocco phi sul guscio, esatte (costanti) sul bordo.
+        n_phi_blocks = ceil(Nt/phi_block_size);
+        n_shell_slots = 1 + (Ntheta_cap-1)*n_phi_blocks; % vedi node_sphcap_creator.m
+        block_cap = 2*n_shell_slots + Nt;
+        for cap_side=1:2 % 1=bottom, 2=top
+            is_top = (cap_side==2);
+            [cap_face] = sphcap_face(Nt,Ntheta_cap,phi_block_size,rot,Center,is_top);
+            for jf=1:1:block_cap
+                cap_face(jf).ID = cap_face(jf).ID + face_counter + wall_nfaces + is_top*block_cap;
+                if jf<=n_shell_slots
+                    cap_face(jf).prop_opt = sat.prop.cyl(i).opt(cap_side,:);
+                else
+                    cap_face(jf).prop_opt = sat.prop.cyl(i).opt(3,:);
+                end
+            end
+            sat.geom.globe=[sat.geom.globe,cap_face];
+        end
     end
 end
 

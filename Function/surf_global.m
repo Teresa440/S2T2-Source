@@ -80,10 +80,38 @@ end
 
 for i=1:1:length(surfaces)
     cont=0;
-    if strcmp(surfaces(i).item,'cyl')==0 && strcmp(surfaces(i).item,'sphcap')==0
+    if strcmp(surfaces(i).item,'cyl')==0 && strcmp(surfaces(i).item,'sphcap')==0 && strcmp(surfaces(i).item,'capf')==0
         for j=1:1:length(surfaces(i).elem)
             if strcmp(surfaces(i).elem(j).type,'v')==1
                 surfaces(i).vert=[surfaces(i).vert;surfaces(i).elem(j).node];
+            end
+        end
+    elseif strcmp(surfaces(i).item,'capf')==1
+        % Gruppo 'capf' (tappo piatto): un solo disco PIENO (0..R_out,
+        % nessun buco -- il core del tappo riempie il centro, a differenza
+        % del tappo anulare della parete). Tutti gli elementi di layer E
+        % core condividono lo stesso ID di faccia (block_cap=1 in
+        % GMM4.m/build_cyl_cap.m), quindi raccolgo i vertici di TUTTI e
+        % prendo solo il guscio convesso (convex hull) sul piano della
+        % faccia -- un disco pieno e' per costruzione convesso, quindi il
+        % guscio esclude automaticamente i punti interni (incluso il
+        % confine layer/core) senza doverli distinguere esplicitamente.
+        cand_cap=[];
+        for j=1:1:length(surfaces(i).elem)
+            cand_cap=[cand_cap;surfaces(i).elem(j).vertf]; %#ok
+        end
+        if isempty(cand_cap)
+            surfaces(i).vert=[];
+        else
+            c0=mean(cand_cap,1);
+            P=cand_cap-c0;
+            [~,~,V]=svd(P,0);
+            p2=P*V(:,1:2);
+            try
+                k=convhull(p2(:,1),p2(:,2));
+                surfaces(i).vert=cand_cap(k(1:end-1),:); % convhull ripete il primo punto in fondo
+            catch
+                surfaces(i).vert=cand_cap; % fallback prudente (punti degeneri/collineari)
             end
         end
     elseif strcmp(surfaces(i).item,'cyl')==1
