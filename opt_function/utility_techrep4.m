@@ -9,6 +9,8 @@ function [value] = utility_techrep4(x,Source_term_partial,Source_term_partial_co
 
 value = zeros(size(x,1),opt_st.N_objectives);
 
+diss_mat_tot_orig = diss_mat_tot; % pristine copy: diss_mat_tot is mutated per-candidate below and must not accumulate across candidates
+
 for i = 1:1:size(x,1)
 
     x_one = x(i,:);
@@ -57,20 +59,28 @@ for i = 1:1:size(x,1)
     
     % Assigning heater power to every item specified in the optimization, for
     % the hot/default case and for the cold case if val_cases == 2
+    % (heater power is applied uniformly to every operative mode's column)
+    diss_mat_tot = diss_mat_tot_orig; % fresh copy: do not carry over previous candidate's heater power
+    if val_cases == 2
+        hot_cols = 2:2:size(diss_mat_tot,2);
+        cold_cols = 3:2:size(diss_mat_tot,2);
+    else
+        hot_cols = 2:size(diss_mat_tot,2);
+    end
     cont_h_hot = 1;
     cont_h_cold = 1;
     for j = find(opt_st.item_heater_hot)
-        diss_mat_tot(j,2) = diss_mat_tot(j,2) + heater_hot_P(cont_h_hot);
+        diss_mat_tot(j,hot_cols) = diss_mat_tot(j,hot_cols) + heater_hot_P(cont_h_hot);
         cont_h_hot = cont_h_hot + 1;
     end
     for j = find(opt_st.item_heater_cold)
-        diss_mat_tot(j,3) = diss_mat_tot(j,3) + heater_cold_P(cont_h_cold);
+        diss_mat_tot(j,cold_cols) = diss_mat_tot(j,cold_cols) + heater_cold_P(cont_h_cold);
         cont_h_cold = cont_h_cold + 1;
     end
     % Computing nodal dissipations
-    [sat]=Q_dissipation3(sat,diss_mat_tot,1);
+    [sat]=Q_dissipation_modes(sat,diss_mat_tot,1);
     if val_cases == 2
-        [sat]=Q_dissipation3(sat,diss_mat_tot,2);
+        [sat]=Q_dissipation_modes(sat,diss_mat_tot,2);
     end
     
     % opt_prop.m, preparing eps_for_Ge
@@ -85,13 +95,13 @@ for i = 1:1:size(x,1)
     % Gebhart
     [Vf_G]=Gebhart2(Vf,eps_for_Ge,sat); % view factor correction with Gebhart method
     
-    % Hot case heat flux
+    % Hot case heat flux (environmental part only; internal dissipation is added per-mode below)
     [Source_term,sat]=Q_source3_compute(Source_term_partial,sat,r_dc,1); % heat flux final computation
-    Q0_st=diag(mean(Source_term.Qa+Source_term.Qir+Source_term.Qs))+diag(sat.node.Q_diss); % average heat source for every node, performet along dimension 1 (temporal dimension) of the Q matrices
+    Q0_env_hot=diag(mean(Source_term.Qa+Source_term.Qir+Source_term.Qs)); % average heat source for every node, performet along dimension 1 (temporal dimension) of the Q matrices
     % Cold case heat flux
     if isequal(val_cases,2)
         [Source_term_cold,sat]=Q_source3_compute(Source_term_partial_cold,sat,r_dc,2); % heat flux final computation
-        Q0_st_cold=diag(mean(Source_term_cold.Qa_cold+Source_term_cold.Qir_cold+Source_term_cold.Qs_cold))+ diag(sat.node.Q_diss_cold); % average heat source for every node
+        Q0_env_cold=diag(mean(Source_term_cold.Qa_cold+Source_term_cold.Qir_cold+Source_term_cold.Qs_cold)); % average heat source for every node
     end
     
     [G0_Irr] = TMM2_only_radiative(sat,5.67e-8,Vf_G,eps_for_Ge); % computation of radiative conductor
@@ -112,11 +122,23 @@ for i = 1:1:size(x,1)
     
     G_c = G_c-diag(sum(G_c,2)); % (?)
     
-    % steady state temperature computation
-    [T_st] = Steady_comp(sat,Q0_st,G_c,G0_Irr,1);
-    T_st_item = zeros(opt_st.N_item,1);    
+    % steady state temperature computation: one Steady_comp per operative
+    % mode (treating that mode's dissipation as if it lasted forever), then
+    % worst-case (max) across modes, node by node - see NOTES_optimization_modes_pipeline.md
+    N_modes = size(sat.node.Q_diss_modes,2);
+    T_st_modes = zeros(sat.node.total_node,N_modes);
+    for m = 1:N_modes
+        T_st_modes(:,m) = Steady_comp(sat,Q0_env_hot+diag(sat.node.Q_diss_modes(:,m)),G_c,G0_Irr,1);
+    end
+    T_st = max(T_st_modes,[],2);
+    T_st_item = zeros(opt_st.N_item,1);
     if isequal(val_cases,2)
-        [T_st_cold] = Steady_comp(sat,Q0_st_cold,G_c,G0_Irr,2);
+        N_modes_cold = size(sat.node.Q_diss_modes_cold,2);
+        T_st_cold_modes = zeros(sat.node.total_node,N_modes_cold);
+        for m = 1:N_modes_cold
+            T_st_cold_modes(:,m) = Steady_comp(sat,Q0_env_cold+diag(sat.node.Q_diss_modes_cold(:,m)),G_c,G0_Irr,2);
+        end
+        T_st_cold = max(T_st_cold_modes,[],2);
         T_st_item_cold = zeros(opt_st.N_item,1);
     end
     % item average temperature
