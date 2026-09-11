@@ -151,8 +151,8 @@ end
 opt_st.T_op_item_avg = (T_op_min_item + T_op_max_item)/2; % average
 opt_st.T_op_item = [T_op_min_item, T_op_max_item]; % min - max
 range=(T_op_max_item-T_op_min_item);
-opt_st.f=fit([min(range) max(range)]', [1 0.1]', 'poly1');
-k_part=opt_st.f(range);
+opt_st.f=polyfit([min(range) max(range)], [1 0.1], 1);
+k_part=polyval(opt_st.f,range);
 opt_st.k_weight=k_part/sum(k_part);
 
 %% Delunay Search Preparation

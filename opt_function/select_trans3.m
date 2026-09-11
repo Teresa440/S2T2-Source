@@ -1,6 +1,6 @@
 function [x,f,alpha_str,epsint_str,epsext_str,id_node_from,...
     id_node_to,A_link,heat,Tmin_max_st,idx]=select_trans3(x,alpha_str,epsint_str,epsext_str,...
-    sat,Vf,Vf_G,v_dc,attitude,opt_st,sim_data,env,orbit,diss_mat,G_c_,...
+    sat,Vf,Vf_G,v_dc,attitude,opt_st,sim_data,env,orbit,diss_mat,mode_schedule,G_c_,...
     G_hc,f,id_node_from,id_node_to,A_link,heat,val_cases,button_handle,ROB_STRUCT)
 
 if exist("ROB_STRUCT","var") && ~isempty(ROB_STRUCT)    
@@ -75,21 +75,28 @@ for kk=1:1:length(x(:,1)) % for every solution in the pareto front...
 
     % Assigning heater power to every item specified in the optimization, for
     % the hot/default case and for the cold case if val_cases == 2
+    % (heater power is applied uniformly to every operative mode's column)
     diss_mat_new = diss_mat;
+    if val_cases == 2
+        hot_cols = 2:2:size(diss_mat_new,2);
+        cold_cols = 3:2:size(diss_mat_new,2);
+    else
+        hot_cols = 2:size(diss_mat_new,2);
+    end
     cont = 1;
     for j = find(opt_st.item_heater_hot)
-        diss_mat_new(j,2) = diss_mat_new(j,2) + heat.case1(cont,kk+1); % kk+1 because first column of heat is the id of the item (legacy data format)
+        diss_mat_new(j,hot_cols) = diss_mat_new(j,hot_cols) + heat.case1(cont,kk+1); % kk+1 because first column of heat is the id of the item (legacy data format)
         cont = cont + 1;
     end
     cont = 1;
     for j = find(opt_st.item_heater_cold)
-        diss_mat_new(j,3) = diss_mat_new(j,3) + heat.case2(cont,kk+1); % kk+1 because first column of heat is the id of the item (legacy data format)
+        diss_mat_new(j,cold_cols) = diss_mat_new(j,cold_cols) + heat.case2(cont,kk+1); % kk+1 because first column of heat is the id of the item (legacy data format)
         cont = cont + 1;
     end
     % Computing nodal dissipations
-    [sat]=Q_dissipation3(sat,diss_mat_new,1);
+    [sat]=Q_dissipation_modes(sat,diss_mat_new,1);
     if val_cases == 2
-        [sat]=Q_dissipation3(sat,diss_mat_new,2);
+        [sat]=Q_dissipation_modes(sat,diss_mat_new,2);
     end
 
     % Gebhart, opt_prop.m, preparing eps_for_Ge
@@ -105,11 +112,11 @@ for kk=1:1:length(x(:,1)) % for every solution in the pareto front...
 
     % Hot case heat flux
     [Source_temp_hot,sat]=Q_source3_compute(Source_term_partial,sat,r_dc,1); % heat flux final computation
-    Q0_st=diag(mean(Source_temp_hot.Qa+Source_temp_hot.Qir+Source_temp_hot.Qs))+diag(sat.node.Q_diss); % average heat source for every node, performet along dimension 1 (temporal dimension) of the Q matrices
+    Q0_st=diag(mean(Source_temp_hot.Qa+Source_temp_hot.Qir+Source_temp_hot.Qs))+diag(mean(sat.node.Q_diss_modes,2)); % average heat source for every node (mean over modes: only used as initial guess T_0, the transient corrects it)
     % Cold case heat flux
     if isequal(val_cases,2)
         [Source_temp_cold,sat]=Q_source3_compute(Source_term_partial_cold,sat,r_dc,2); % heat flux final computation
-        Q0_st_cold=diag(mean(Source_temp_cold.Qa_cold+Source_temp_cold.Qir_cold+Source_temp_cold.Qs_cold))+ diag(sat.node.Q_diss_cold); % average heat source for every node
+        Q0_st_cold=diag(mean(Source_temp_cold.Qa_cold+Source_temp_cold.Qir_cold+Source_temp_cold.Qs_cold))+ diag(mean(sat.node.Q_diss_modes_cold,2)); % average heat source for every node
     end
     
     [G0_Irr] = TMM2_only_radiative(sat,5.67e-8,Vf_G,eps_for_Ge); % computation of radiative conductor
@@ -153,8 +160,9 @@ for kk=1:1:length(x(:,1)) % for every solution in the pareto front...
 
     % transient analysis
     T_0=T_st;
+    Qdiss_dyn = Build_Qdiss_dynamic(sat.node.Q_diss_modes, mode_schedule, dt, r_dc, sim_data);
     [T,time,flag_1]=transient3_pruning(sat,T_0,dt,r_dc,sim_data,time,G0_Irr,...
-        G_c,G_hc,Q_0,1,T_op,opt_st);
+        G_c,G_hc,Q_0,Qdiss_dyn,1,T_op,opt_st);
     T=T';
     T_Celsius=T-273.15;
     Tmin_max=[min(T_Celsius,[],1); max(T_Celsius,[],1)]';
@@ -182,8 +190,9 @@ for kk=1:1:length(x(:,1)) % for every solution in the pareto front...
 
         % transient analysis
         T_0=T_st_cold;
+        Qdiss_dyn_cold = Build_Qdiss_dynamic(sat.node.Q_diss_modes_cold, mode_schedule, dt, r_dc, sim_data);
         [T_cold,time,flag_2]=transient3_pruning(sat,T_0,dt,r_dc,sim_data,time,G0_Irr,...
-            G_c,G_hc,Q_0_cold,2,T_op,opt_st);
+            G_c,G_hc,Q_0_cold,Qdiss_dyn_cold,2,T_op,opt_st);
         T_cold=T_cold';
         T_cold_Celsius=T_cold-273.15;
         Tmin_max_cold=[min(T_cold_Celsius,[],1); max(T_cold_Celsius,[],1)]';

@@ -1,5 +1,5 @@
 function [T,Tempo,flag]=transient3_pruning(sat,T_0,dt,r_dc,sim_data,Tempo,G0_Irr,G_c,G_hc,...
-    Q_0,casevalue,T_op,opt_st)
+    Q_0,Qdiss_dyn,casevalue,T_op,opt_st)
 
 flag = 0; % solution validity: 0 = valid, 1 = invalid
 N_instants = ((length(r_dc)-1)*sim_data.n_orbit)-1;
@@ -8,11 +8,9 @@ T=zeros(sat.node.total_node,length(r_dc)*sim_data.n_orbit);
 T(:,1)=T_0;
 switch casevalue
     case 1
-        diss=sat.node.Q_diss;
         eps_af_earth_matrix=sat.node.analysis.all.epsAf_earth;
         eps_af_space_matrix=sat.node.analysis.all.epsAf_space;
     case 2
-        diss=sat.node.Q_diss_cold;
         eps_af_earth_matrix=sat.node.analysis.all.epsAf_earth_cold;
         eps_af_space_matrix=sat.node.analysis.all.epsAf_space_cold;
 end
@@ -32,9 +30,9 @@ for k=1:N_instants
         -diag(4*sigma*epsAf_earth_*T(:,k).^3);
     B=(G_c+G_Irr);
     D=3*sigma*epsAf_space_*(T(:,k).^4)-sigma*epsAf_space*(T(:,k).^4)+...
-        Q_0(k,:)'+2*sat.node.Q_diss+Q_0(k+1,:)'+...
+        Q_0(k,:)'+Qdiss_dyn(:,k)+Qdiss_dyn(:,k+1)+Q_0(k+1,:)'+...
         3*sigma*epsAf_earth_*(T(:,k).^4)-...
-        sigma*epsAf_earth*(T(:,k).^4);                            %2x Qdiss (t and t+)                           
+        sigma*epsAf_earth*(T(:,k).^4);                            %Qdiss (t and t+)
     AA=G_hc-1/2*A*dt;
     BB=G_hc*T(:,k)+1/2*B*dt*T(:,k)+1/2*D*dt;
     T(:,k+1)=AA\BB;
@@ -53,9 +51,9 @@ for k=1:N_instants
         B=(G_c+G_Irr);
         AA=G_hc-1/2*A*dt;
         D=3*sigma*epsAf_space_*(T_old.^4)-sigma*epsAf_space*(T(:,k).^4)+...
-        Q_0(k,:)'+2*diss+Q_0(k+1,:)'+...
+        Q_0(k,:)'+Qdiss_dyn(:,k)+Qdiss_dyn(:,k+1)+Q_0(k+1,:)'+...
         3*sigma*epsAf_earth_*(T_old.^4)-...
-        sigma*epsAf_earth*(T(:,k).^4); 
+        sigma*epsAf_earth*(T(:,k).^4);
         BB=G_hc*T(:,k)+1/2*B*dt*T(:,k)+1/2*D*dt;
         T(:,k+1)=AA\BB;
         err=norm(T(:,k+1)-T_old);

@@ -80,8 +80,8 @@ if exist("ROB_STRUCT","var") && ~isempty(ROB_STRUCT)
     U_T_low_hot_f=ROB_STRUCT.U_T_low_hot_f;
     U_T_high_hot_f=ROB_STRUCT.U_T_high_hot_f;
 else
-    U_T_low_hot_f=fit([0 max(gap_diff_hot(:,1))]',[0 1]','poly1'); % scale function: from 0 to minimum gap in the low side (hot/default case)
-    U_T_high_hot_f=fit([0 max(gap_diff_hot(:,2))]',[0 1]','poly1'); % scale function: from 0 to minimum gap in the high side (hot/default case)
+    U_T_low_hot_f=@(x) reshape(x./max(gap_diff_hot(:,1)),[],1); % scale function: from 0 to minimum gap in the low side (hot/default case)
+    U_T_high_hot_f=@(x) reshape(x./max(gap_diff_hot(:,2)),[],1); % scale function: from 0 to minimum gap in the high side (hot/default case)
 end
 U_T_low_hot = U_T_low_hot_f(gap_diff_hot(:,1));
 U_T_high_hot = U_T_high_hot_f(gap_diff_hot(:,2));
@@ -98,8 +98,8 @@ if isequal(val_cases,2)
         U_T_low_cold_f=ROB_STRUCT.U_T_low_cold_f;
         U_T_high_cold_f=ROB_STRUCT.U_T_high_cold_f;
     else
-        U_T_low_cold_f=fit([0 max(gap_diff_cold(:,1))]',[0 1]','poly1'); % scale function: from 0 to minimum gap in the low side (hot/default case)
-        U_T_high_cold_f=fit([0 max(gap_diff_cold(:,2))]',[0 1]','poly1'); % scale function: from 0 to minimum gap in the high side (hot/default case)
+        U_T_low_cold_f=@(x) reshape(x./max(gap_diff_cold(:,1)),[],1); % scale function: from 0 to minimum gap in the low side (hot/default case)
+        U_T_high_cold_f=@(x) reshape(x./max(gap_diff_cold(:,2)),[],1); % scale function: from 0 to minimum gap in the high side (hot/default case)
     end
     U_T_low_cold = U_T_low_cold_f(gap_diff_cold(:,1));
     U_T_high_cold = U_T_high_cold_f(gap_diff_cold(:,2));
@@ -112,7 +112,7 @@ if opt_st.N_heater_hot > 0
     if exist("ROB_STRUCT","var") && ~isempty(ROB_STRUCT)
         U_H_hot_f=ROB_STRUCT.U_H_hot_f; 
     else
-        U_H_hot_f=fit([min(heat_sum_h) max(heat_sum_h)]',[1 0]','poly1'); % scale function: from minimum total heater power to maximum total heater power (hot/default case)
+        U_H_hot_f=@(x) reshape(1 - (x-min(heat_sum_h))./(max(heat_sum_h)-min(heat_sum_h)),[],1); % scale function: from minimum total heater power to maximum total heater power (hot/default case)
         if min(heat_sum_h) == max(heat_sum_h) && min(heat_sum_h) == 0 % degenerate case
             U_H_hot_f = @(x) 1*ones(size(x));
         end
@@ -127,7 +127,7 @@ if opt_st.N_heater_cold > 0
     if exist("ROB_STRUCT","var") && ~isempty(ROB_STRUCT)
         U_H_cold_f=ROB_STRUCT.U_H_cold_f;
     else
-        U_H_cold_f=fit([min(heat_sum_c) max(heat_sum_c)]',[1 0]','poly1'); % scale function: from minimum total heater power to maximum total heater power (cold case)
+        U_H_cold_f=@(x) reshape(1 - (x-min(heat_sum_c))./(max(heat_sum_c)-min(heat_sum_c)),[],1); % scale function: from minimum total heater power to maximum total heater power (cold case)
         if min(heat_sum_c) == max(heat_sum_c) && min(heat_sum_c) == 0 % degenerate case
             U_H_cold_f = @(x) 1*ones(size(x));
         end
@@ -142,7 +142,7 @@ if opt_st.N_link > 0
     if exist("ROB_STRUCT","var") && ~isempty(ROB_STRUCT)
         U_L_f=ROB_STRUCT.U_L_f;
     else
-         U_L_f=fit([min(Vol_link_sum) max(Vol_link_sum)]',[1 0]','poly1'); % scale function: from minimum total heater power to maximum total heater power (cold case)
+         U_L_f=@(x) reshape(1 - (x-min(Vol_link_sum))./(max(Vol_link_sum)-min(Vol_link_sum)),[],1); % scale function: from minimum total heater power to maximum total heater power (cold case)
          if min(Vol_link_sum) == max(Vol_link_sum) && min(Vol_link_sum) == 0 % degenerate case
              U_L_f = @(x) 1*ones(size(x));
          end
