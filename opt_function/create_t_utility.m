@@ -114,7 +114,7 @@ if opt_st.N_heater_hot > 0
     else
         U_H_hot_f=@(x) reshape(1 - (x-min(heat_sum_h))./(max(heat_sum_h)-min(heat_sum_h)),[],1); % scale function: from minimum total heater power to maximum total heater power (hot/default case)
         if min(heat_sum_h) == max(heat_sum_h) && min(heat_sum_h) == 0 % degenerate case
-            U_H_hot_f = @(x) 1*ones(size(x));
+            U_H_hot_f = @(x) ones(numel(x),1);
         end
     end
     U_H_hot = U_H_hot_f(heat_sum_h);
@@ -129,7 +129,7 @@ if opt_st.N_heater_cold > 0
     else
         U_H_cold_f=@(x) reshape(1 - (x-min(heat_sum_c))./(max(heat_sum_c)-min(heat_sum_c)),[],1); % scale function: from minimum total heater power to maximum total heater power (cold case)
         if min(heat_sum_c) == max(heat_sum_c) && min(heat_sum_c) == 0 % degenerate case
-            U_H_cold_f = @(x) 1*ones(size(x));
+            U_H_cold_f = @(x) ones(numel(x),1);
         end
     end    
     U_H_cold = U_H_cold_f(heat_sum_c);
@@ -144,7 +144,7 @@ if opt_st.N_link > 0
     else
          U_L_f=@(x) reshape(1 - (x-min(Vol_link_sum))./(max(Vol_link_sum)-min(Vol_link_sum)),[],1); % scale function: from minimum total heater power to maximum total heater power (cold case)
          if min(Vol_link_sum) == max(Vol_link_sum) && min(Vol_link_sum) == 0 % degenerate case
-             U_L_f = @(x) 1*ones(size(x));
+             U_L_f = @(x) ones(numel(x),1);
          end
     end
     U_L = U_L_f(Vol_link_sum);
